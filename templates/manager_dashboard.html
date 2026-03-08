@@ -1,0 +1,91 @@
+{% extends 'layout.html' %}
+{% block title %}لوحة تحكم المدير{% endblock %}
+
+{% block content %}
+    <h1>لوحة تحكم المدير</h1>
+    <p>أهلاً بك، {{ session.get('username') }}. اختر الإدارة التي تريدها.</p>
+    <hr>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+
+        <!-- (اللينك الأول: إدارة المنتجات) -->
+        <a href="{{ url_for('manage_products') }}" style="display: block; width: 300px; padding: 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 8px;">
+            <h3>إدارة المنتجات والمخزون</h3>
+            <p>إضافة منتجات جديدة (شيبسي، الخ) ومراجعة المخزون الحالي.</p>
+        </a>
+
+        <!-- (اللينك الجديد اهو) -->
+            <a href="{{ url_for('manage_rooms') }}" style="display: block; width: 300px; padding: 20px; background-color: #6f42c1; color: white; text-decoration: none; border-radius: 8px;">
+                <h3>إدارة الأوض والأسعار</h3>
+                <p>تعديل أسعار (Shared, Silent, Private) وإضافة أوض جديدة.</p>
+            </a>
+
+        <!-- (قريباً: إدارة الموظفين) -->
+        <a href="{{ url_for('manage_users') }}" style="display: block; width: 300px; padding: 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>إدارة الموظفين</h3>
+    <p>إضافة موظف جديد للصباح أو المساء.</p>
+</a>
+
+        <!-- (قريباً: التقارير المالية) -->
+        <a href="{{ url_for('financial_reports') }}" style="display: block; width: 300px; padding: 20px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 8px;">
+    <h3>التقارير المالية</h3>
+    <p>مراجعة إيراد اليوم وإيراد كل وردية.</p>
+</a>
+
+
+<a href="{{ url_for('analytics_report') }}" style="display: block; width: 300px; padding: 20px; background-color: #20c997; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>التحليلات والإحصائيات</h3>
+    <p>عرض أكثر الطلاب زيارة، والمنتجات مبيعاً (Top 5, Top 10).</p>
+</a>
+
+<a href="{{ url_for('manage_coupons') }}" style="display: block; width: 300px; padding: 20px; background-color: #fd7e14; color: white; text-decoration: none; border-radius: 8px;">
+            <h3>إدارة الكوبونات</h3>
+            <p>مراجعة الكوبونات النشطة والمستخدمة.</p>
+        </a>
+
+
+ <a href="{{ url_for('subscriptions_list') }}" style="display: block; width: 300px; padding: 20px; background-color: #e83e8c; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>الاشتراكات النشطة</h3>
+    <p>عرض كل الطلاب المشتركين في باقات حالياً.</p>
+</a>       
+
+
+<a href="{{ url_for('library') }}" style="display: block; width: 300px; padding: 20px; background-color: #20c997; color: white; text-decoration: none; border-radius: 8px; margin-top: 20px;">
+    <h3>📚 إدارة المكتبة</h3>
+    <p>إضافة كتب جديدة ومراجعة الاستعارات.</p>
+</a>
+
+<a href="{{ url_for('manage_subscription_types') }}" style="display: block; width: 300px; padding: 20px; background-color: #e83e8c; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>💳 إدارة أسعار الباقات</h3>
+    <p>تعديل ساعات وصلاحية وأسعار الباقات الشهرية.</p>
+</a>
+
+
+<a href="{{ url_for('manage_settings') }}" style="display: block; width: 300px; padding: 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>⚙️ إعدادات النظام</h3>
+    <p>تحديد عدد كروت النت المجانية وغيرها.</p>
+</a>
+
+<a href="{{ url_for('log_expense') }}" style="display: block; width: 300px; padding: 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 8px;">
+    <h3>💸 تسجيل مصروف</h3>
+    <p>تسجيل المصروفات النثرية واليومية.</p>
+</a>
+
+    </div>
+
+
+    <hr style="margin-top: 40px; border-color: #dc3545;">
+    
+    <div style="text-align: center; margin-bottom: 50px;">
+        <h3 style="color: #dc3545;">⚠️ منطقة تنظيف البيانات (للاختبار)</h3>
+        <p>هذا الزر سيقوم بمسح <strong>الطلاب، المبيعات، الحجوزات، والشيفتات</strong>.</p>
+        <p style="font-weight: bold;">(لن يتم مسح حسابات الموظفين أو المدير، ستظل مسجل الدخول).</p>
+        
+        <form action="{{ url_for('reset_data_keep_users') }}" method="POST" onsubmit="return confirm('هل أنت متأكد؟ سيتم مسح جميع التعاملات والطلاب والبدء من جديد!');">
+            <button type="submit" style="background-color: #dc3545; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold;">
+                ♻️ تصفير البيانات فقط (Keep Users)
+            </button>
+        </form>
+    </div>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+{% block title %}إعدادات النظام{% endblock %}
+
+{% block content %}
+    <h1>⚙️ إعدادات النظام العامة</h1>
+    <hr>
+    
+    <div style="background-color: #f9f9f9; padding: 30px; border-radius: 8px; border: 1px solid #ddd; max-width: 600px; margin: 0 auto;">
+        <form action="{{ url_for('manage_settings') }}" method="POST">
+            
+            <h3 style="margin-top: 0; color: #007bff;">🌐 إعدادات كروت النت</h3>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="internet_limit" style="font-weight: bold; font-size: 1.1em;">عدد الكروت المجانية لكل طالب (في الزيارة الواحدة):</label>
+                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                    مثال: لو كتبت <strong>2</strong>، الطالب هياخد أول كارتين بـ 0 جنيه، والتالت بفلوس.
+                    <br>لو كتبت <strong>0</strong>، مفيش حاجة ببلاش وكل الكروت بفلوس.
+                </p>
+                <input type="number" id="internet_limit" name="internet_free_limit" 
+                       value="{{ current_limit }}" 
+                       min="0" required 
+                       style="width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ccc; border-radius: 5px; text-align: center;">
+            </div>
+
+            <button type="submit" style="width: 100%; font-size: 18px; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                حفظ الإعدادات
+            </button>
+            
+        </form>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('dashboard') }}" class="btn-back">
+            &larr; رجوع للوحة التحكم
+        </a>
+    </div>
+
+{% endblock %}

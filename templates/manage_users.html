@@ -1,0 +1,87 @@
+{% extends 'layout.html' %}
+{% block title %}إدارة الموظفين{% endblock %}
+
+{% block content %}
+    <h1>إدارة الموظفين</h1>
+    <hr>
+    
+    <!-- (الجزء الأول: فورم إضافة موظف جديد - زي ما هو) -->
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        <h3>إضافة موظف جديد</h3>
+        
+        <form action="{{ url_for('manage_users') }}" method="POST">
+            <table style="width: 100%;">
+                <tr>
+                    <td style="padding: 5px;">
+                        <label for="username">اسم المستخدم (للدخول):</label>
+                        <input type="text" id="username" name="username" required placeholder="مثال: emp_ali" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px;">
+                        <label for="password">كلمة المرور:</label>
+                        <input type="password" id="password" name="password" required placeholder="••••••••" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px;">
+                        <label for="role">الصلاحية:</label>
+                        <select id="role" name="role" required style="width: 100%; padding: 8px;">
+                            <option value="employee">موظف (Employee)</option>
+                            <option value="manager">مدير (Manager)</option>
+                        </select>
+                    </td>
+                    <td style="padding: 5px; vertical-align: bottom;">
+                        <button type="submit" style="font-size: 16px; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            إضافة المستخدم
+                        </button>
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
+
+    <!-- (الجزء الثاني: تقرير الموظفين الحاليين - مع زرار الحذف) -->
+    <h3>الموظفون الحاليون (Employees)</h3>
+    
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #f4f4f4;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">رقم الموظف</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">اسم المستخدم</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">إجراء (Action)</th> <!-- (جديد) -->
+            </tr>
+        </thead>
+        <tbody>
+            {% if employees %}
+                {% for emp in employees %}
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd;">
+                        {{ emp.user_id }}
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">
+                        {{ emp.username }}
+                    </td>
+                    <!-- (جديد) زرار الحذف -->
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                        <form action="{{ url_for('delete_user', user_id=emp.user_id) }}" method="POST" style="display: inline;">
+                            <button type="submit" 
+                                    style="background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;"
+                                    onclick="return confirm('هل أنت متأكد أنك تريد حذف هذا الموظف؟')">
+                                حذف
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                        لا يوجد موظفون مسجلون حالياً.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <a href="javascript:history.back()" class="btn-back">
+    &larr; رجوع (Back)
+</a>
+
+{% endblock %}

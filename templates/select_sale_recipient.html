@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% block title %}لمن هذه العملية؟{% endblock %}
+
+{% block content %}
+    <h1>إضافة عملية بيع (كافيتريا)</h1>
+    <p>الرجاء تحديد لمن هذه العملية:</p>
+    <hr>
+
+    <!-- (الاختيار ب) بيع نقدي (كاش) -->
+    <div style="margin-bottom: 30px;">
+        <h3>بيع نقدي (Cash Sale)</h3>
+        <p>لعميل غير مسجل أو بيع سريع بدون ربطه بطالب.</p>
+        <a href="{{ url_for('add_sale', visit_id=0) }}" 
+           style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+            متابعة كـ "بيع نقدي"
+        </a>
+    </div>
+
+    <hr>
+
+    <!-- (الاختيار أ) لستة الطلاب الموجودين -->
+    <div>
+        <h3>بيع لطالب مسجل دخوله (Check-in)</h3>
+        {% if active_visits %}
+            <div class="student-list" style="display: flex; flex-direction: column; gap: 10px;">
+                {% for visit in active_visits %}
+                    <div class="student-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px;">
+                        <div>
+                            <strong style="font-size: 18px;">{{ visit.name }}</strong>
+                            <br>
+                            <span style="color: #555;">(موجود في: {{ visit.room_name }})</span>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('add_sale', visit_id=visit.visit_id) }}" 
+                               style="padding: 10px 20px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 5px;">
+                                اختيار
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p style="color: #555;">لا يوجد طلاب مسجلين دخول حالياً.</p>
+        {% endif %}
+    </div>
+
+    <a href="{{ url_for('dashboard') }}" style="margin-top: 30px; display: inline-block;">
+        &larr; إلغاء (العودة للرئيسية)
+    </a>
+
+{% endblock %}

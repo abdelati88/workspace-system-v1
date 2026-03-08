@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول - نظام الـ Workspace</title>
+    <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png"> <style>
+        /* Reset some default browser styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* خط أحدث */
+            background: linear-gradient(to right, #22e77bff, #25f5fcff); /* خلفية متدرجة */
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; /* استخدم min-height عشان لو المحتوى زاد */
+            color: #333;
+        }
+        .login-container { 
+            background-color: #fff; 
+            padding: 40px; /* زيادة المساحة الداخلية */
+            border-radius: 12px; /* حواف دائرية أكتر */
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2); /* ظل أوضح */
+            width: 350px; /* عرض أكبر شوية */
+            text-align: center;
+        }
+        .login-container h2 {
+            margin-bottom: 25px;
+            color: #333;
+        }
+        .logo {
+            width: 100px; /* حجم اللوجو */
+            height: 100px;
+            margin-bottom: 20px;
+            border-radius: 50%; /* عشان يبقى دائري لو حبيت */
+            object-fit: cover; /* عشان الصورة تتظبط جوا الحجم */
+            border: 2px solid #eee; /* إطار خفيف */
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right; /* عشان الليبل يبدأ من اليمين */
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px; /* مساحة داخلية أكبر */
+            border: 1px solid #ddd;
+            border-radius: 6px; /* حواف دائرية أكتر */
+            font-size: 16px;
+        }
+        .form-group input:focus {
+            border-color: #007bff; /* لون الإطار لما المستخدم يضغط */
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+            outline: none; /* إزالة الإطار الأزرق الافتراضي */
+        }
+        .btn {
+            width: 100%;
+            padding: 14px; /* مساحة داخلية أكبر للزرار */
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 17px;
+            font-weight: bold;
+            transition: background-color 0.3s ease; /* حركة سلسة عند الهوفر */
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+
+
+        .flash-message {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    font-weight: bold;
+    text-align: center;
+}
+.flash-message.error {
+    background-color: #f8d7da; /* أحمر فاتح */
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+.flash-message.success {
+    background-color: #d4edda; /* أخضر فاتح */
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="شعار الـ Workspace" class="logo">
+        <h2>تسجيل الدخول</h2>
+
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class.="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <form method="POST">
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">اسم المستخدم:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">كلمة المرور:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn">دخول</button>
+        </form>
+
+        <div style="margin-top: 20px; text-align: center;">
+    <a href="{{ url_for('shutdown') }}" 
+       onclick="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');" 
+       style="display: inline-block; text-decoration: none; color: #dc3545; font-weight: bold; padding: 10px 20px; background: white; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        🛑 إغلاق النظام نهائياً
+    </a>
+</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,216 @@
+{% extends 'layout.html' %}
+{% block title %}تفاصيل الوردية رقم {{ shift.shift_id }}{% endblock %}
+
+{% block content %}
+<style>
+    .det-wrap { max-width: 1150px; margin: 0 auto; padding: 20px; direction: rtl; font-family: 'Segoe UI', Tahoma, sans-serif; }
+
+    /* ─── Header ─── */
+    .det-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: white; border-radius: 14px; padding: 22px 28px;
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 22px;
+    }
+    .det-header h2 { margin: 0; font-size: 21px; }
+    .det-header .meta { font-size: 13px; color: #adb5bd; margin-top: 5px; line-height: 1.7; }
+    .net-badge { background:#28a745; border-radius:12px; padding:12px 22px; text-align:center; min-width:140px; }
+    .net-badge .lbl { font-size:11px; color:#c3e6cb; }
+    .net-badge .amt { font-size:28px; font-weight:bold; }
+
+    /* ─── Summary Cards ─── */
+    .sum-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin-bottom:26px; }
+    .sc { background:white; border-radius:10px; padding:14px; text-align:center;
+          border-top:4px solid #007bff; box-shadow:0 2px 8px rgba(0,0,0,0.07); }
+    .sc.g { border-color:#28a745; } .sc.r { border-color:#dc3545; }
+    .sc.o { border-color:#fd7e14; } .sc.b { border-color:#007bff; }
+    .sc .slbl { font-size:11px; color:#6c757d; margin-bottom:5px; }
+    .sc .sval { font-size:20px; font-weight:bold; color:#212529; }
+
+    /* ─── Section Title ─── */
+    .sec-title { font-size:16px; font-weight:bold; color:#343a40;
+                 border-right:4px solid #007bff; padding-right:10px; margin:24px 0 12px; }
+
+    /* ─── Main Table ─── */
+    .dt { width:100%; border-collapse:collapse; font-size:13.5px; background:white;
+          border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.08);
+          margin-bottom:28px; }
+    .dt thead tr { background:#343a40; color:white; text-align:center; }
+    .dt thead th { padding:11px 8px; font-weight:600; }
+    .dt tbody tr { border-bottom:1px solid #e9ecef; }
+    .dt tbody tr:hover { background:#f8f9fa; }
+    .dt tbody td { padding:10px 8px; text-align:center; vertical-align:middle; }
+    .badge-c { background:#d4edda; color:#155724; border-radius:4px; padding:2px 8px; font-size:12px; }
+    .badge-s { background:#cce5ff; color:#004085; border-radius:4px; padding:2px 8px; font-size:12px; }
+
+    /* ─── Print ─── */
+    @media print {
+        .no-print { display:none !important; }
+        .det-wrap { max-width:100%; }
+        .det-header { background:#343a40 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
+</style>
+
+<div class="det-wrap">
+
+    {# ─── Header ─── #}
+    <div class="det-header">
+        <div>
+            <h2>📊 تفاصيل الوردية رقم {{ shift.shift_id }}</h2>
+            <div class="meta">
+                الموظف: <strong style="color:white;">{{ shift.username }}</strong><br>
+                من: {{ shift.start_time }} &nbsp;←&nbsp; إلى: {{ shift.end_time }}
+            </div>
+        </div>
+        <div class="net-badge">
+            <div class="lbl">💰 صافي الدرج</div>
+            <div class="amt">{{ "%.2f"|format(shift.net_cash) }} ج</div>
+        </div>
+    </div>
+
+    {# ─── Summary Cards ─── #}
+    <div class="sum-cards">
+        <div class="sc g">
+            <div class="slbl">+ إيراد الساعات</div>
+            <div class="sval">{{ "%.2f"|format(shift.revenue_hours) }} ج</div>
+        </div>
+        <div class="sc g">
+            <div class="slbl">+ إيراد المبيعات</div>
+            <div class="sval">{{ "%.2f"|format(shift.revenue_sales) }} ج</div>
+        </div>
+        <div class="sc r">
+            <div class="slbl">− المصروفات</div>
+            <div class="sval">{{ "%.2f"|format(shift.total_expenses) }} ج</div>
+        </div>
+        <div class="sc o">
+            <div class="slbl">− الخصومات</div>
+            <div class="sval">{{ "%.2f"|format(shift.total_discounts) }} ج</div>
+        </div>
+        <div class="sc b">
+            <div class="slbl">💳 صافي الدرج</div>
+            <div class="sval">{{ "%.2f"|format(shift.net_cash) }} ج</div>
+        </div>
+    </div>
+
+    {# ─── Visits Table ─── #}
+    <div class="sec-title">📋 فواتير الطلاب ({{ student_bills|length }} زيارة)</div>
+
+    {% if student_bills %}
+    <table class="dt">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>اسم الطالب</th>
+                <th>الغرفة</th>
+                <th>المدة (ساعة)</th>
+                <th>طريقة الدفع</th>
+                <th>تكلفة الوقت</th>
+                <th>الكافيتريا</th>
+                <th>إجمالي الكافيتريا</th>
+                <th>الخصم</th>
+                <th>المدفوع</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bill in student_bills %}
+            <tr>
+                <td style="color:#6c757d;font-size:12px;">{{ loop.index }}</td>
+                <td style="font-weight:bold;text-align:right;padding-right:12px;">{{ bill.visit_details.student_name }}</td>
+                <td>{{ bill.visit_details.room_name }}</td>
+                <td>{{ "%.2f"|format(bill.visit_details.duration_hours) }}</td>
+                <td>
+                    {% if bill.visit_details.payment_method == 'subscription' %}
+                        <span class="badge-s">💳 باقة</span>
+                    {% else %}
+                        <span class="badge-c">💵 كاش</span>
+                    {% endif %}
+                </td>
+                <td style="font-weight:bold;">{{ "%.2f"|format(bill.visit_details.total_cost) }} ج</td>
+                <td style="font-size:12px;color:#6c757d;text-align:right;padding-right:8px;">
+                    {% if bill.sales_items %}
+                        {% for item in bill.sales_items %}{{ item.product_name }} ×{{ item.quantity }}{% if not loop.last %}، {% endif %}{% endfor %}
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if bill.total_sales > 0 %}
+                        <strong>{{ "%.2f"|format(bill.total_sales) }} ج</strong>
+                    {% else %}—{% endif %}
+                </td>
+                <td style="color:#dc3545;">
+                    {% if bill.total_discount > 0 %}{{ "%.2f"|format(bill.total_discount) }} ج{% else %}—{% endif %}
+                </td>
+                <td style="font-weight:bold;color:#007bff;">
+                    {% if bill.visit_details.payment_method == 'subscription' %}
+                        {{ "%.2f"|format(bill.total_sales) }} ج
+                    {% else %}
+                        {{ "%.2f"|format(bill.grand_total) }} ج
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="color:#6c757d;text-align:center;padding:20px;">لا توجد زيارات مغلقة لهذه الوردية.</p>
+    {% endif %}
+
+    {# ─── Cash Sales Table ─── #}
+    <div class="sec-title">☕ المبيعات النقدية المستقلة</div>
+    <table class="dt">
+        <thead>
+            <tr><th>#</th><th>المنتج</th><th>الكمية</th><th>الإجمالي</th></tr>
+        </thead>
+        <tbody>
+            {% if cash_sales %}
+                {% for sale in cash_sales %}
+                <tr>
+                    <td style="color:#6c757d;font-size:12px;">{{ loop.index }}</td>
+                    <td style="text-align:right;padding-right:12px;">{{ sale.product_name }}</td>
+                    <td>{{ sale.quantity }}</td>
+                    <td style="font-weight:bold;">{{ "%.2f"|format(sale.total_price) }} ج</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" style="padding:14px;text-align:center;color:#6c757d;">لا يوجد مبيعات نقدية مستقلة.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {# ─── Expenses Table ─── #}
+    <div class="sec-title">💸 تفاصيل المصروفات</div>
+    <table class="dt">
+        <thead>
+            <tr><th>#</th><th>البيان</th><th>المبلغ</th></tr>
+        </thead>
+        <tbody>
+            {% if expenses %}
+                {% for exp in expenses %}
+                <tr>
+                    <td style="color:#6c757d;font-size:12px;">{{ loop.index }}</td>
+                    <td style="text-align:right;padding-right:12px;">{{ exp.description }}</td>
+                    <td style="font-weight:bold;color:#dc3545;">{{ "%.2f"|format(exp.amount) }} ج</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="3" style="padding:14px;text-align:center;color:#6c757d;">لا يوجد مصروفات.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {# ─── Actions ─── #}
+    <div class="no-print" style="display:flex;gap:12px;margin-top:10px;margin-bottom:30px;">
+        <button onclick="window.print()" style="
+            padding:12px 24px; background:#0d6efd; color:white; border:none;
+            border-radius:8px; font-size:15px; font-weight:bold; cursor:pointer;
+            box-shadow:0 3px 10px rgba(13,110,253,0.3);
+        ">🖨️ طباعة / حفظ PDF</button>
+
+        <a href="javascript:history.back()" style="
+            padding:12px 24px; background:#6c757d; color:white;
+            border-radius:8px; font-size:15px; font-weight:bold;
+            text-decoration:none; display:inline-flex; align-items:center;
+        ">← رجوع</a>
+    </div>
+
+</div>
+{% endblock %}

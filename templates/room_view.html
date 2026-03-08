@@ -1,0 +1,55 @@
+{% extends 'layout.html' %}
+{% block title %}غرفة {{ room_name }}{% endblock %}
+
+{% block content %}
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>📍 تفاصيل غرفة: {{ room_name }}</h1>
+        <a href="{{ url_for('dashboard') }}" class="btn-back" style="margin: 0;">&larr; عودة للوحة التحكم</a>
+    </div>
+    <hr>
+
+    {% if students %}
+        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            {% for student in students %}
+            <div style="background-color: white; border: 1px solid #ddd; border-radius: 8px; width: 300px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden;">
+                <div style="background-color: #007bff; color: white; padding: 15px; text-align: center;">
+                    <h3 style="margin: 0;">{{ student.name }}</h3>
+                    <small>{{ student.phone }}</small>
+                </div>
+                
+                <div style="padding: 15px; text-align: center;">
+                    <p style="color: #555; margin-bottom: 5px;">وقت الدخول:</p>
+                    <strong style="font-size: 1.1em;">{{ student.check_in_time.split(' ')[1] }}</strong> <br>
+                    <small style="color: #888;">{{ student.check_in_time.split(' ')[0] }}</small>
+                </div>
+
+                <div style="padding: 15px; background-color: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px;">
+                    <a href="{{ url_for('add_sale', visit_id=student.visit_id) }}" 
+                       style="flex: 1; text-align: center; padding: 8px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">
+                        ☕ كافيتريا
+                    </a>
+
+
+
+                   <a href="{{ url_for('switch_room', visit_id=student.visit_id) }}" 
+   style="flex: 1; text-align: center; padding: 8px; background-color: #fd7e14; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;"
+   title="نقل لمكان آخر">
+   🔄 نقل
+</a>
+                    
+                    <a href="{{ url_for('show_invoice', visit_id=student.visit_id) }}" 
+                       style="flex: 1; text-align: center; padding: 8px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">
+                        🚪 خروج
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 50px; color: #777;">
+            <h2>الغرفة فارغة حالياً 🍃</h2>
+            <p>لا يوجد طلاب مسجلين دخول في هذه الغرفة.</p>
+        </div>
+    {% endif %}
+
+{% endblock %}

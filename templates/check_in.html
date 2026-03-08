@@ -1,0 +1,87 @@
+{% extends 'layout.html' %}
+{% block title %}تسجيل دخول طالب{% endblock %}
+
+{% block content %}
+<style>
+    .checkin-container {
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 30px;
+        background: #ffffff;
+        border-radius: 15px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        direction: rtl; /* لضبط الاتجاه العربي */
+        text-align: right;
+    }
+    .form-header {
+        background-color: #28a745;
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    .custom-input {
+        width: 100%;
+        padding: 12px;
+        margin: 10px 0 20px 0;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    .time-box {
+        background-color: #fff3cd;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #ffeeba;
+        margin-bottom: 20px;
+    }
+    .btn-submit {
+        width: 100%;
+        padding: 15px;
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    .btn-submit:hover { background-color: #218838; }
+    .btn-back {
+        display: block;
+        text-align: center;
+        margin-top: 15px;
+        color: #6c757d;
+        text-decoration: none;
+    }
+</style>
+
+<div class="checkin-container">
+    <div class="form-header">
+        <h3 class="mb-0">تسجيل دخول طالب (Check-in)</h3>
+    </div>
+
+    <form action="{{ url_for('check_in') }}" method="POST">
+        
+        <label class="fw-bold">ابحث بالاسم أو رقم التليفون:</label>
+        <input type="text" name="search_query" required class="custom-input" placeholder="اكتب اسم الطالب هنا...">
+
+        <div class="time-box">
+            <label class="fw-bold" style="color: #856404;">وقت الدخول (اختياري):</label>
+            <input type="time" name="manual_time" class="custom-input" style="margin-bottom: 5px;">
+            <p style="font-size: 13px; color: #856404; margin-top: 5px;">
+                ⚠️ لو الجهاز كان فاصل، حدد وقت دخول الطالب الفعلي. سيبه فاضي للوقت الحالي.
+            </p>
+        </div>
+
+        <button type="submit" class="btn-submit">
+            تسجيل دخول (Check-in)
+        </button>
+
+        <a href="javascript:history.back()" class="btn-back">
+            &larr; رجوع للصفحة السابقة
+        </a>
+    </form>
+</div>
+{% endblock %}

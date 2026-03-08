@@ -1,0 +1,104 @@
+{% extends 'layout.html' %}
+{% block title %}إدارة المنتجات والمخزون{% endblock %}
+
+{% block content %}
+    <h1>إدارة المنتجات والمخزون</h1>
+    <hr>
+    
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        <h3>إضافة منتج جديد للمخزن</h3>
+        <form action="{{ url_for('manage_products') }}" method="POST">
+            <table style="width: 100%;">
+                <tr>
+                    <td style="padding: 5px;">
+                        <label for="name">اسم المنتج:</label>
+                        <input type="text" id="name" name="name" required placeholder="مثال: شيبسي" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px;">
+                        <label for="purchase_price">سعر الشراء (التكلفة):</label>
+                        <input type="number" id="purchase_price" name="purchase_price" required placeholder="4.0" step="0.1" min="0" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px;">
+                        <label for="sale_price">سعر البيع (للعميل):</label>
+                        <input type="number" id="sale_price" name="sale_price" required placeholder="5.0" step="0.1" min="0" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px;">
+                        <label for="stock_quantity">الكمية الأولية:</label>
+                        <input type="number" id="stock_quantity" name="stock_quantity" required placeholder="0" step="0.1" min="0" value="0" style="width: 100%; padding: 8px;">
+                    </td>
+                    <td style="padding: 5px; vertical-align: bottom;">
+                        <button type="submit" style="font-size: 16px; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            إضافة
+                        </button>
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
+
+    <h3>تقرير المخزون الحالي (Stock)</h3>
+    
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #343a40; color: white;">
+                <th style="padding: 10px; text-align: right;">المنتج</th>
+                <th style="padding: 10px; text-align: right;">التكلفة</th>
+                <th style="padding: 10px; text-align: right;">سعر البيع</th>
+                <th style="padding: 10px; text-align: center;">المخزون</th>
+                <th style="padding: 10px; text-align: center;">إجراءات (تعديل / حذف)</th> </tr>
+        </thead>
+        <tbody>
+            {% if products %}
+                {% for product in products %}
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 10px; font-weight: bold;">
+                        {{ product.name }}
+                    </td>
+                    <td style="padding: 10px; color: #dc3545;">
+                        {{ "%.2f"|format(product.purchase_price) }} ج
+                    </td>
+                    <td style="padding: 10px; color: #28a745;">
+                        {{ "%.2f"|format(product.sale_price) }} ج
+                    </td>
+                    
+                    <td style="padding: 10px; text-align: center; font-weight: bold;
+                               {% if product.stock_quantity <= 0 %} color: red; 
+                               {% elif product.stock_quantity <= 5 %} color: orange; 
+                               {% else %} color: green; {% endif %}">
+                        {{ product.stock_quantity }}
+                    </td>
+
+                    <td style="padding: 10px; text-align: center;">
+                        <div style="display: flex; justify-content: center; gap: 10px;">
+                            
+                            <a href="{{ url_for('edit_product', product_id=product.product_id) }}" 
+                               style="padding: 5px 15px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                                ✏️ تعديل
+                            </a>
+
+                            <form action="{{ url_for('delete_product', product_id=product.product_id) }}" method="POST" style="display:inline;">
+                                <button type="submit" onclick="return confirm('هل أنت متأكد من حذف هذا المنتج نهائياً؟')"
+                                        style="padding: 5px 15px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                                    🗑️ حذف
+                                </button>
+                            </form>
+
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" style="padding: 20px; text-align: center;">
+                        لم يتم إضافة أي منتجات بعد.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <a href="javascript:history.back()" class="btn-back">
+        &larr; رجوع (Back)
+    </a>
+
+{% endblock %}

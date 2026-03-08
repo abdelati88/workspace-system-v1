@@ -1,0 +1,35 @@
+{% extends 'layout.html' %}
+{% block title %}اختيار طالب{% endblock %}
+
+{% block content %}
+    <h1>نتائج البحث (تطابق أكثر من طالب)</h1>
+    <p>الاسم/الرقم الذي بحثت عنه يطابق الأسماء التالية. من فضلك اختر الطالب الصحيح لعمل Check-in:</p>
+    <hr>
+
+    <div class="student-list" style="display: flex; flex-direction: column; gap: 10px;">
+
+        {% for student in students %}
+            <div class="student-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px;">
+                <div>
+                    <strong style="font-size: 18px;">{{ student.name }}</strong>
+                    <br>
+                    <span style="color: #555;">تليفون: {{ student.phone }}</span>
+                    <br>
+                    <span style="color: #555;">الكلية: {{ student.college or 'غير مسجلة' }}</span>
+                </div>
+                <div>
+                    <a href="{{ url_for('select_room', student_id=student.student_id) }}" 
+                        style="padding: 10px 20px; ...">
+                            اختيار
+                        </a>
+                </div>
+            </div>
+        {% endfor %}
+
+    </div>
+
+    <a href="{{ url_for('check_in') }}" style="margin-top: 20px; display: inline-block;">
+        &larr; العودة للبحث
+    </a>
+
+{% endblock %}

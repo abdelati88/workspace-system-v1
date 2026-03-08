@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}نظام الـ Workspace{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background-color: #fff;
+            border-bottom: 1px solid #dee2e6;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .navbar .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1ca877ff;
+            text-decoration: none; /* إزالة الخط */
+        }
+        
+        .navbar .user-info {
+            display: flex;
+            align-items: center;
+        }
+        .navbar .user-info span {
+            margin-left: 20px;
+        }
+        .navbar .logout-btn {
+            color: #dc3545;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .navbar .logout-btn:hover {
+            text-decoration: underline;
+        }
+        .content-container {
+            max-width: 1200px;
+            margin: 30px auto; 
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .flash-message {
+            padding: 15px;
+            margin: 0 auto 20px auto;
+            border-radius: 6px;
+            font-weight: bold;
+            text-align: center;
+            max-width: 1200px;
+        }
+        .flash-message.error { background-color: #f8d7da; color: #721c24; }
+        .flash-message.success { background-color: #d4edda; color: #155724; }
+        .flash-message.info { background-color: #d1ecf1; color: #0c5460; }
+        .flash-message.info_dark { background-color: #d6d8db; color: #1b1e21; font-weight: bold; }
+        
+        .btn-back {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .btn-back:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    
+   <nav class="navbar">
+        <a href="{{ url_for('dashboard') }}" class="logo">Task Workspace</a>
+        
+        <div class="user-info">
+
+
+{% if session.get('role') in ['manager', 'employee'] %}
+            <a href="{{ url_for('manage_students') }}" style="margin-left: 20px; text-decoration: none; color: #007bff; font-weight: bold;">
+                👨‍🎓 إدارة الطلاب
+            </a>
+        {% endif %}
+
+            <a href="{{ url_for('shutdown') }}" 
+               onclick="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');" 
+               style="color: #fff; background-color: #dc3545; font-weight: bold; text-decoration: none; margin-left: 20px; padding: 8px 15px; border-radius: 5px; font-size: 14px;">
+                🛑 إغلاق النظام
+            </a>
+
+            {% if session.get('username') %}
+                <span style="margin-left: 15px;">أهلاً، <strong>{{ session.get('username') }}</strong> </span>
+                <a href="{{ url_for('logout') }}" class="logout-btn">تسجيل الخروج</a>
+            {% endif %}
+        </div>
+    </nav>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="content-container">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+</body>
+</html>

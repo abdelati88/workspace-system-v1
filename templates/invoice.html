@@ -1,0 +1,267 @@
+{% extends 'layout.html' %}
+{% block title %}فاتورة الطالب{% endblock %}
+
+{% block content %}
+    <style>
+        @media print {
+            /* إخفاء كل محتويات الموقع الأساسية */
+            body * { visibility: hidden; }
+            .no-print { display: none !important; }
+
+            /* إظهار الريسيت وإجباره على الظهور */
+            #print-section, #print-section * { 
+                visibility: visible; 
+                display: block !important; /* هذا هو السطر السحري اللي كان ناقص */
+            }
+            
+            /* ضبط مكان الريسيت في أعلى الورقة */
+            #print-section { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+            }
+        }
+        
+        /* تنسيق جدول الريسيت */
+        .receipt-table td { padding: 5px 0; border-bottom: 1px dashed #333; }
+    </style>
+
+    <div class="no-print">
+        <h1>فاتورة الطالب: {{ student.name }}</h1>
+        <p>تليفون: {{ student.phone }}</p>
+        <hr>
+
+        <h3>1. حساب الوقت</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="background-color: #f4f4f4;">
+                <td style="padding: 10px; border: 1px solid #ddd;">الأوضة</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ visit_details.room_name }} ({{ visit_details.hourly_rate }} جنيه/ساعة)</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">وقت الدخول</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ visit_details.check_in_time }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">المدة (حتى الآن)</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(visit_details.duration_hours) }} ساعة</td>
+            </tr>
+            <tr style="font-weight: bold;">
+                <td style="padding: 10px; border: 1px solid #ddd;">إجمالي تكلفة الوقت</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(visit_details.total_time_cost) }} جنيه</td>
+            </tr>
+        </table>
+
+        <h3>2. المبيعات (الكافيتريا)</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+                <tr style="background-color: #f4f4f4;">
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">المنتج</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 180px;">الكمية (تعديل)</th> <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الإجمالي</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">حذف</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if sales_items %}
+                    {% for item in sales_items %}
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; vertical-align: middle;">{{ item.name }}</td>
+                        
+                        <td style="padding: 5px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">
+                            <form action="{{ url_for('edit_sale_quantity', sale_id=item.sale_id) }}" method="POST" style="display: flex; justify-content: center; align-items: center; gap: 5px;">
+                                <input type="number" name="new_quantity" value="{{ item.quantity }}" min="1" 
+                                       style="width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px;">
+                                
+                                <button type="submit" title="حفظ التعديل"
+                                        style="background-color: #ffc107; color: #333; border: 1px solid #e0a800; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    🔄
+                                </button>
+                            </form>
+                        </td>
+
+                        <td style="padding: 10px; border: 1px solid #ddd; vertical-align: middle;">{{ item.total_price }} جنيه</td>
+                        
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">
+                            <form action="{{ url_for('delete_sale_item', sale_id=item.sale_id) }}" method="POST">
+                                <button type="submit" onclick="return confirm('حذف المنتج ده نهائياً؟')"
+                                        style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                                    ❌
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" style="padding: 10px; border: 1px solid #ddd; text-align: center;">لا يوجد مبيعات.</td>
+                    </tr>
+                {% endif %}
+                
+                <tr style="font-weight: bold; background-color: #e9ecef;">
+                    <td colspan="2" style="padding: 10px; border: 1px solid #ddd;">إجمالي المبيعات</td>
+                    <td colspan="2" style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(visit_details.total_sales_cost) }} جنيه</td>
+                </tr>
+        </table>
+        
+        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <form action="{{ url_for('apply_coupon', visit_id=visit_details.visit_id) }}" method="POST">
+                <table style="width: 100%;">
+                    <tr>
+                        <td style="width: 70%;">
+                            <label for="coupon_code" style="font-weight: bold;">عندك كود خصم؟</label>
+                            <input type="text" id="coupon_code" name="coupon_code" 
+                                   placeholder="GIFT-ABC12"
+                                   value="{{ discount_info.code or '' }}"
+                                   style="width: 95%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
+                        </td>
+                        <td style="vertical-align: bottom;">
+                            <button type="submit" 
+                                    style="font-size: 16px; padding: 11px 20px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+                                تطبيق الكوبون
+                            </button>
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+
+        <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+            <form action="{{ url_for('apply_manual_discount', visit_id=visit_details.visit_id) }}" method="POST">
+                <label style="font-weight: bold; color: #856404;">تطبيق خصم خاص (مجاملة):</label>
+                
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <select name="manual_type" style="padding: 10px; border: 1px solid #ccc; border-radius: 5px; flex: 1;">
+                        <option value="fixed" {% if manual_disc_type == 'fixed' %}selected{% endif %}>مبلغ (ج.م)</option>
+                        <option value="percentage" {% if manual_disc_type == 'percentage' %}selected{% endif %}>نسبة (%)</option>
+                    </select>
+
+                    <input type="number" name="manual_value" 
+                           placeholder="مثال: 20" step="0.1" min="0"
+                           value="{{ manual_disc_value or '' }}"
+                           style="flex: 2; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px;">
+                    
+                    <button type="submit" 
+                            style="flex: 1; padding: 10px; background-color: #ffc107; color: #333; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        تطبيق الخصم
+                    </button>
+                </div>
+                <small style="color: #666;">* اضغط "تطبيق" لرؤية السعر الجديد فقط (لن يتم غلق الفاتورة).</small>
+            </form>
+        </div>
+
+        <div style="background-color: #007bff; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">الإجمالي قبل الخصم: {{ "%.2f"|format(visit_details.grand_total) }} جنيه</h3>
+            
+            {% if manual_discount_amount > 0 %}
+                <h3 style="margin: 5px 0; color: #ffc107;">
+                    - خصم خاص: {{ "%.2f"|format(manual_discount_amount) }} جنيه
+                </h3>
+            {% endif %}
+
+            {% if discount_info.amount > 0 %}
+                <h3 style="margin: 5px 0; color: #ffc107;">
+                    - كوبون ({{ discount_info.code }}): {{ "%.2f"|format(discount_info.amount) }} جنيه
+                </h3>
+            {% endif %}
+            
+            <h1 style="margin: 10px 0; font-size: 50px;">
+                الإجمالي المطلوب: {{ "%.2f"|format(visit_details.final_total) }} جنيه
+            </h1>
+        </div>
+
+        <a href="{{ url_for('sell_subscription', student_id=student.student_id, visit_id=visit_details.visit_id) }}" 
+           style="display:block; text-align:center; margin-bottom:20px; padding: 10px 15px; background-color: #6610f2; color: white; border-radius: 5px; text-decoration: none; font-weight: bold;">
+            ➕ تفعيل باقة اشتراك للطالب
+        </a>
+
+        <form action="{{ url_for('confirm_payment', visit_id=visit_details.visit_id) }}" method="POST">
+            
+            <input type="hidden" name="manual_discount_final" value="{{ manual_discount_amount }}">
+            <input type="hidden" name="applied_coupon_code" value="{{ discount_info.code or '' }}">
+            
+            <div style="background-color: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px;">
+                <h3 style="margin-top: 0;">اختر طريقة الدفع:</h3>
+                
+                <label style="display: block; margin-bottom: 10px; cursor: pointer; font-size: 18px;">
+                    <input type="radio" name="payment_method" value="cash" checked> 
+                    💵 دفع نقدي (Cash)
+                </label>
+
+                {% if active_sub %}
+                    <div style="background-color: #e2e6ea; padding: 10px; border-radius: 5px; border: 1px solid #ced4da;">
+                        <label style="display: block; cursor: pointer; font-size: 18px; color: #0056b3; font-weight: bold;">
+                            <input type="radio" name="payment_method" value="subscription"> 
+                            💳 خصم من الباقة (المتبقى: {{ "%.1f"|format(active_sub.remaining_hours) }} ساعة)
+                        </label>
+                        <p style="margin: 5px 25px 0 0; font-size: 14px; color: #555;">
+                            سيتم خصم <strong>{{ "%.2f"|format(visit_details.duration_hours) }}</strong> ساعة من الرصيد.
+                            <br>
+                            (المطلوب دفع المبيعات فقط نقداً: {{ "%.2f"|format(visit_details.total_sales_cost) }} جنيه)
+                        </p>
+                    </div>
+                {% else %}
+                    <p style="color: #dc3545; font-weight: bold;">🚫 الطالب ليس لديه اشتراك نشط.</p>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="window.print()" 
+                        style="flex: 1; font-size: 20px; padding: 15px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    🖨️ طباعة فاتورة
+                </button>
+
+                <button type="submit" 
+                        style="flex: 2; font-size: 20px; padding: 15px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    ✅ تأكيد وإنهاء الزيارة
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div id="print-section" style="display:none;">
+        <div style="width: 300px; margin: auto; font-family: 'Courier New', monospace; text-align: center; border: 1px solid #000; padding: 10px;">
+            <h3 style="margin: 5px 0;">WorkSpace Invoice</h3>
+            <p style="font-size: 12px; margin: 5px 0;">{{ visit_details.check_in_time }}</p>
+            <hr style="border-top: 1px dashed black;">
+            
+            <div style="text-align: left; font-size: 14px; margin-bottom: 10px;">
+                <strong>Student:</strong> {{ student.name }}<br>
+                <strong>Room:</strong> {{ visit_details.room_name }}<br>
+            </div>
+
+            <table class="receipt-table" style="width: 100%; font-size: 14px; border-collapse: collapse;">
+                <tr>
+                    <td style="text-align: left;">Time ({{ "%.2f"|format(visit_details.duration_hours) }}h)</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(visit_details.total_time_cost) }}</td>
+                </tr>
+                
+                {% for item in sales_items %}
+                <tr>
+                    <td style="text-align: left;">{{ item.name }} (x{{ item.quantity }})</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(item.total_price) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            
+            <hr style="border-top: 1px dashed black;">
+            
+            <table style="width: 100%; font-size: 14px;">
+                <tr>
+                    <td style="text-align: left;">Subtotal:</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(visit_details.grand_total) }}</td>
+                </tr>
+                {% if manual_discount_amount > 0 or discount_info.amount > 0 %}
+                <tr>
+                    <td style="text-align: left;">Discount:</td>
+                    <td style="text-align: right;">-{{ "%.2f"|format(manual_discount_amount + discount_info.amount) }}</td>
+                </tr>
+                {% endif %}
+            </table>
+
+            <hr style="border-top: 2px solid black;">
+            <h2 style="margin: 10px 0;">TOTAL: {{ "%.2f"|format(visit_details.final_total) }}</h2>
+            <hr style="border-top: 2px solid black;">
+            <p style="font-size: 12px;">Thank you for visiting!</p>
+        </div>
+    </div>
+{% endblock %}

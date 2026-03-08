@@ -1,0 +1,272 @@
+{% extends 'layout.html' %}
+{% block title %}مراجعة الوردية قبل الإغلاق{% endblock %}
+
+{% block content %}
+<style>
+    /* ─── General ─── */
+    .preview-wrapper { max-width: 1100px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; direction: rtl; }
+
+    /* ─── Header Card ─── */
+    .shift-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: white; border-radius: 14px; padding: 24px 30px;
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 24px;
+    }
+    .shift-header h2 { margin: 0; font-size: 22px; }
+    .shift-header .meta { font-size: 14px; color: #adb5bd; margin-top: 4px; }
+    .net-cash-badge {
+        background: #28a745; border-radius: 12px; padding: 12px 24px; text-align: center;
+    }
+    .net-cash-badge .label { font-size: 12px; color: #c3e6cb; }
+    .net-cash-badge .amount { font-size: 32px; font-weight: bold; }
+
+    /* ─── Summary Cards ─── */
+    .summary-cards {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 14px; margin-bottom: 28px;
+    }
+    .card {
+        background: white; border-radius: 10px; padding: 16px;
+        border-top: 4px solid #007bff; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        text-align: center;
+    }
+    .card.green  { border-color: #28a745; }
+    .card.red    { border-color: #dc3545; }
+    .card.orange { border-color: #fd7e14; }
+    .card.blue   { border-color: #007bff; }
+    .card .card-label { font-size: 12px; color: #6c757d; margin-bottom: 6px; }
+    .card .card-value { font-size: 22px; font-weight: bold; color: #212529; }
+
+    /* ─── Visits Table ─── */
+    .section-title {
+        font-size: 17px; font-weight: bold; color: #343a40;
+        border-right: 4px solid #007bff; padding-right: 10px;
+        margin: 24px 0 12px;
+    }
+    .visits-table {
+        width: 100%; border-collapse: collapse;
+        font-size: 13.5px; background: white;
+        border-radius: 10px; overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .visits-table thead tr {
+        background: #343a40; color: white; text-align: center;
+    }
+    .visits-table thead th { padding: 12px 8px; font-weight: 600; }
+    .visits-table tbody tr { border-bottom: 1px solid #e9ecef; transition: background .15s; }
+    .visits-table tbody tr:hover { background: #f8f9fa; }
+    .visits-table tbody td { padding: 10px 8px; text-align: center; vertical-align: middle; }
+    .visits-table tbody tr.still-inside { background: #fff9e6; }
+    .badge-cash { background:#d4edda; color:#155724; border-radius:4px; padding:2px 8px; font-size:12px; }
+    .badge-sub  { background:#cce5ff; color:#004085; border-radius:4px; padding:2px 8px; font-size:12px; }
+    .badge-open { background:#fff3cd; color:#856404; border-radius:4px; padding:2px 8px; font-size:12px; }
+
+    /* ─── Action Buttons ─── */
+    .actions {
+        display: flex; gap: 14px; margin-top: 30px; flex-wrap: wrap;
+    }
+    .btn {
+        padding: 13px 28px; border: none; border-radius: 8px;
+        font-size: 16px; font-weight: bold; cursor: pointer;
+        text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+        transition: opacity .2s, transform .1s;
+    }
+    .btn:hover { opacity: .88; transform: translateY(-1px); }
+    .btn-print   { background: #0d6efd; color: white; }
+    .btn-confirm { background: #dc3545; color: white; }
+    .btn-back    { background: #6c757d; color: white; }
+
+    /* ─── Print styles ─── */
+    @media print {
+        .actions, nav, .sidebar, .flash-messages { display: none !important; }
+        .preview-wrapper { max-width: 100%; }
+        .shift-header { background: #343a40 !important; -webkit-print-color-adjust: exact; }
+    }
+</style>
+
+<div class="preview-wrapper">
+
+    {# ─── Header ─── #}
+    <div class="shift-header">
+        <div>
+            <h2>👁️ مراجعة الوردية قبل الإغلاق</h2>
+            <div class="meta">موظف: {{ summary.employee }} &nbsp;|&nbsp; رقم الوردية: #{{ summary.shift_id }}</div>
+        </div>
+        <div class="net-cash-badge">
+            <div class="label">💰 الصافي المتوقع</div>
+            <div class="amount">{{ "%.2f"|format(summary.net_cash) }} ج</div>
+        </div>
+    </div>
+
+    {# ─── Summary Cards ─── #}
+    <div class="summary-cards">
+        <div class="card green">
+            <div class="card-label">+ ساعات Shared</div>
+            <div class="card-value">{{ "%.2f"|format(summary.rev_shared) }} ج</div>
+        </div>
+        <div class="card green">
+            <div class="card-label">+ ساعات Private</div>
+            <div class="card-value">{{ "%.2f"|format(summary.rev_private) }} ج</div>
+        </div>
+        <div class="card blue">
+            <div class="card-label">+ مبيعات الكافيتريا</div>
+            <div class="card-value">{{ "%.2f"|format(summary.rev_sales) }} ج</div>
+        </div>
+        <div class="card red">
+            <div class="card-label">− المصروفات</div>
+            <div class="card-value">{{ "%.2f"|format(summary.expenses) }} ج</div>
+        </div>
+        <div class="card orange">
+            <div class="card-label">− الخصومات</div>
+            <div class="card-value">{{ "%.2f"|format(summary.discounts) }} ج</div>
+        </div>
+    </div>
+
+    {# ─── Detailed Visits Table ─── #}
+    <div class="section-title">📋 تفاصيل الزيارات ({{ visits_detail|length }} زيارة)</div>
+
+    {% if visits_detail %}
+    <table class="visits-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>اسم الطالب</th>
+                <th>القاعة</th>
+                <th>وقت الدخول</th>
+                <th>وقت الخروج</th>
+                <th>المدة (ساعة)</th>
+                <th>طريقة الدفع</th>
+                <th>تكلفة الوقت</th>
+                <th>طلبات الكافيتريا</th>
+                <th>إجمالي الكافيتريا</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in visits_detail %}
+            <tr class="{{ 'still-inside' if '(لم يخرج بعد)' in v.check_out_time else '' }}">
+                <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
+                <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ v.student_name }}</td>
+                <td>{{ v.room_name }}</td>
+                <td style="font-size:12px; color:#0d6efd;">{{ v.check_in_time }}</td>
+                <td style="font-size:12px; color:{% if '(لم يخرج بعد)' in v.check_out_time %}#856404{% else %}#dc3545{% endif %};">
+                    {{ v.check_out_time }}
+                </td>
+                <td>{{ v.duration_hours }}</td>
+                <td>
+                    {% if v.payment_method == 'cash' %}
+                        <span class="badge-cash">كاش</span>
+                    {% elif v.payment_method == 'subscription' %}
+                        <span class="badge-sub">باقة</span>
+                    {% else %}
+                        <span class="badge-open">{{ v.payment_method }}</span>
+                    {% endif %}
+                </td>
+                <td style="font-weight:bold;">{{ "%.2f"|format(v.total_cost) }} ج</td>
+                <td style="font-size:12px; color:#6c757d; text-align:right; padding-right:8px;">{{ v.sales_summary }}</td>
+                <td>{% if v.sales_total > 0 %}<strong>{{ "%.2f"|format(v.sales_total) }} ج</strong>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="color:#6c757d; text-align:center; padding:20px;">لا توجد زيارات في هذه الوردية حتى الآن.</p>
+    {% endif %}
+
+    {# ─── Action Buttons ─── #}
+    <div style="
+        margin-top: 36px;
+        padding: 24px 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    ">
+        {# الصف الأول: زرار الطباعة #}
+        <button onclick="window.print()" style="
+            width: 100%;
+            max-width: 480px;
+            padding: 15px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(13,110,253,0.3);
+            transition: opacity .2s, transform .1s;
+        " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            🖨️ طباعة التقرير / حفظ PDF
+        </button>
+
+        {# فاصل #}
+        <div style="width:100%; max-width:480px; border-top: 1px dashed #dee2e6;"></div>
+
+        {# تحذير قبل الإنهاء #}
+        <p style="
+            font-size: 13px;
+            color: #856404;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 10px 18px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            margin: 0;
+        ">
+            ⚠️ بعد تأكيد الإنهاء، لن تتمكن من التراجع أو تسجيل أي عمليات جديدة في هذه الوردية.
+        </p>
+
+        {# زراران في صف: رجوع + تأكيد إنهاء #}
+        <div style="display:flex; gap:12px; width:100%; max-width:480px;">
+            <a href="{{ url_for('dashboard') }}" style="
+                flex: 1;
+                padding: 14px;
+                background: #6c757d;
+                color: white;
+                border-radius: 10px;
+                text-decoration: none;
+                text-align: center;
+                font-size: 15px;
+                font-weight: bold;
+                transition: opacity .2s;
+            " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                ← رجوع
+            </a>
+
+            <form action="{{ url_for('end_shift') }}" method="POST" style="flex:2;"
+                  onsubmit="return confirm('⚠️ هل أنت متأكد من إنهاء الوردية نهائياً؟');">
+                <button type="submit" style="
+                    width: 100%;
+                    padding: 14px;
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    box-shadow: 0 4px 12px rgba(220,53,69,0.3);
+                    transition: opacity .2s;
+                " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                    🛑 تأكيد إنهاء الوردية
+                </button>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
