@@ -2378,7 +2378,7 @@ def reset_data_keep_users():
 # --- دالة فتح المتصفح ---
 def open_browser():
     # بنفتح المتصفح على البورت 5001
-    webbrowser.open("http://127.0.0.1:5008/login")
+    webbrowser.open("http://127.0.0.1:5009/login")
 
 # --- نقطة التشغيل الرئيسية ---
 if __name__ == '__main__':
@@ -2387,6 +2387,6 @@ if __name__ == '__main__':
     
     # 2. تشغيل التطبيق (هام جداً: debug=False)
     # ده بيمنع الـ PIN وبيمنع الـ Reload اللي بيبوظ الـ EXE
-    app.run(host='127.0.0.1', port=5008, debug=False)
+    app.run(host='127.0.0.1', port=5009, debug=False)
     //hhhh
     
