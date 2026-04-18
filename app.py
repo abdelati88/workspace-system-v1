@@ -54,54 +54,57 @@ import math
 
 def calculate_dynamic_cost(hours, room_name, hourly_rate):
     # ---------------------------------------------------------
-    # 1. لو الغرفة خاصة (Private) - (الكود القديم بتاعك بالظبط)
+    # 1. لو الغرفة خاصة (Private) أو اجتماعات (Meeting)
     # ---------------------------------------------------------
-    # ضفت هنا 'Meeting' للأمان عشان لو عندك غرفة اجتماعات تتحاسب زي الخاص
     if 'Private' in room_name or 'Meeting' in room_name:
-        # المعادلة دي بتقرب الزمن لأقرب نص ساعة لفوق
+        # تقريب لأقرب نص ساعة لفوق + حد أدنى ساعة واحدة
         billed_hours = math.ceil(hours * 2) / 2
-        
-        # تطبيق الحد الأدنى: ممنوع نحاسب على أقل من ساعة
         if billed_hours < 1.0:
             billed_hours = 1.0
-            
         return billed_hours * hourly_rate
 
     # ---------------------------------------------------------
-    # 2. لو الغرفة عادية (Shared / Silent) - (نظام الباقات الجديد)
+    # 2. لو الغرفة عادية (Shared / Silent) - نظام الشرائح الديناميكي
     # ---------------------------------------------------------
     else:
-        # حسب الجدول اللي في الصورة:
-        # ساعة = 10
-        # 3 ساعات = 20 (معناها أي حد قعد أكتر من ساعة ولحد 3 يدفع 20)
-        # 6 ساعات = 30
-        # 9 ساعات = 35
-        # 12 ساعة = 40
-        # 16 ساعة = 50
-        # 24 ساعة = 60
+        # الشرائح الافتراضية (تُستخدم لو لم تُضبط في الداتا بيز)
+        DEFAULTS = {
+            'tier_price_1h':  10,
+            'tier_price_3h':  25,
+            'tier_price_6h':  35,
+            'tier_price_9h':  40,
+            'tier_price_12h': 50,
+            'tier_price_16h': 60,
+            'tier_price_24h': 70,
+        }
 
-        # عملت سماحية 3 دقايق (0.05 من الساعة) عشان لو حد اتأخر دقيقة ميدخلش في الشريحة اللي بعدها
-        
-        if hours <= 1.05:      # باقة الساعة الواحدة
-            return 10.0
-            
-        elif hours <= 3.05:    # باقة 3 ساعات (يعني الساعتين والـ 3 بـ 20)
-            return 20.0
-            
-        elif hours <= 6.05:    # باقة 6 ساعات (الـ 4 و 5 و 6 بـ 30)
-            return 30.0
-            
-        elif hours <= 9.05:    # باقة 9 ساعات
-            return 35.0
-            
-        elif hours <= 12.05:   # باقة 12 ساعة
-            return 40.0
-            
-        elif hours <= 16.05:   # باقة 16 ساعة
-            return 50.0
-            
-        else:                  # باقة اليوم الكامل (حد أقصى)
-            return 60.0    
+        # جلب الأسعار من الداتا بيز
+        conn = get_db()
+        c = conn.cursor()
+        tier_prices = dict(DEFAULTS)  # ابدأ بالقيم الافتراضية
+        for key in DEFAULTS:
+            c.execute("SELECT setting_value FROM Settings WHERE setting_key=?", (key,))
+            row = c.fetchone()
+            if row:
+                tier_prices[key] = float(row['setting_value'])
+        conn.close()
+
+        # ترتيب الشرائح: (الحد الأقصى للساعات بسماحية 3 دقايق, مفتاح السعر)
+        TIERS = [
+            (1.05,  'tier_price_1h'),
+            (3.05,  'tier_price_3h'),
+            (6.05,  'tier_price_6h'),
+            (9.05,  'tier_price_9h'),
+            (12.05, 'tier_price_12h'),
+            (16.05, 'tier_price_16h'),
+        ]
+
+        for limit, key in TIERS:
+            if hours <= limit:
+                return float(tier_prices[key])
+
+        # لو تجاوز الـ 16 ساعة → باقة اليوم الكامل
+        return float(tier_prices['tier_price_24h'])
     
 # =================================================
 # 🛑 كود إغلاق البرنامج (يوضع في app.py)
@@ -1236,24 +1239,50 @@ def sell_subscription():
 @app.route("/manage_settings", methods=['GET', 'POST'])
 def manage_settings():
     if session.get('role') != 'manager': return redirect(url_for('dashboard'))
-    
+
+    # مفاتيح الشرائح مع قيمها الافتراضية
+    TIER_KEYS = {
+        'tier_price_1h':  10,
+        'tier_price_3h':  25,
+        'tier_price_6h':  35,
+        'tier_price_9h':  40,
+        'tier_price_12h': 50,
+        'tier_price_16h': 60,
+        'tier_price_24h': 70,
+    }
+
     conn = get_db()
     c = conn.cursor()
-    
+
     if request.method == 'POST':
-        new_limit = request.form['internet_free_limit']
-        # تحديث القيمة في الداتا بيز (تستخدم REPLACE عشان لو مش موجودة تتخلق، ولو موجودة تتحدث)
+        # --- حفظ حد كروت النت ---
+        new_limit = request.form.get('internet_free_limit', '2')
         c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', ?)", (new_limit,))
+
+        # --- حفظ أسعار الشرائح ---
+        for key in TIER_KEYS:
+            value = request.form.get(key)
+            if value is not None:
+                c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES (?, ?)", (key, value))
+
         conn.commit()
         flash("تم تحديث الإعدادات بنجاح ✅", "success")
-    
-    # قراءة القيمة الحالية للعرض
+
+    # --- قراءة القيم الحالية للعرض ---
+    # حد كروت النت
     c.execute("SELECT setting_value FROM Settings WHERE setting_key='internet_free_limit'")
     row = c.fetchone()
-    current_limit = int(row['setting_value']) if row else 2 # الافتراضي 2 لو ملقاش حاجة
-    
+    current_limit = int(row['setting_value']) if row else 2
+
+    # أسعار الشرائح
+    tier_prices = {}
+    for key, default in TIER_KEYS.items():
+        c.execute("SELECT setting_value FROM Settings WHERE setting_key=?", (key,))
+        row = c.fetchone()
+        tier_prices[key] = float(row['setting_value']) if row else default
+
     conn.close()
-    return render_template('manage_settings.html', current_limit=current_limit)
+    return render_template('manage_settings.html', current_limit=current_limit, tier_prices=tier_prices)
 
 @app.route("/manage_students")
 def manage_students():

@@ -21,6 +21,23 @@
                        style="width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ccc; border-radius: 5px; text-align: center;">
             </div>
 
+            <!-- أسعار شرائح الغرف المشتركة/الصامتة -->
+            <h3 style="margin-top: 30px; color: #007bff;">💰 أسعار شرائح الغرف المشتركة/الصامتة</h3>
+            <div class="form-group" style="margin-bottom: 20px;">
+                {% for key, label in [
+                    ('tier_price_1h', 'حتى ساعة واحدة'),
+                    ('tier_price_3h', 'حتى 3 ساعات'),
+                    ('tier_price_6h', 'حتى 6 ساعات'),
+                    ('tier_price_9h', 'حتى 9 ساعات'),
+                    ('tier_price_12h', 'حتى 12 ساعة'),
+                    ('tier_price_16h', 'حتى 16 ساعة'),
+                    ('tier_price_24h', 'حتى 24 ساعة')
+                ] %}
+                    <label for="{{ key }}" style="font-weight: bold;">{{ label }}:</label>
+                    <input type="number" id="{{ key }}" name="{{ key }}" value="{{ tier_prices[key] }}" min="0" required style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                {% endfor %}
+            </div>
+
             <button type="submit" style="width: 100%; font-size: 18px; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
                 حفظ الإعدادات
             </button>
