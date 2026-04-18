@@ -384,7 +384,11 @@ def end_shift():
             rev_shared += v['total_cost']
             
     rev_hours = rev_shared + rev_private
-    c.execute("SELECT SUM(total_price) FROM Sales WHERE shift_id = ?", (shift_id,))
+    c.execute("""
+        SELECT SUM(total_price) FROM Sales 
+        WHERE shift_id = ? 
+        AND (visit_id IS NULL OR visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+    """, (shift_id,))
     rev_sales = c.fetchone()[0] or 0
     c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
     expenses = c.fetchone()[0] or 0
@@ -770,6 +774,9 @@ def confirm_payment(visit_id):
         if sub and sub['remaining_hours'] >= duration:
             new_bal = sub['remaining_hours'] - duration
             c.execute("UPDATE StudentSubscriptions SET remaining_hours=? WHERE sub_id=?", (new_bal, sub['sub_id']))
+            # التحصيل من الباقة: لا يتم احتساب تكلفة وقت نقدية في درج الوردية.
+            final_time_cost = 0.0
+            conn.commit()
         else:
             flash("رصيد الباقة لا يكفي! تم التحويل للكاش.", "error")
             payment_method = 'cash'
@@ -857,14 +864,29 @@ def shift_summary_preview():
 
     rev_hours_total = rev_shared + rev_private
 
-    # 2. مبيعات الكافيتريا (المحصّلة فعلاً)
+
+    # 2. مبيعات الكافيتريا (فقط المنتجات العادية)
+    # 3. مبيعات الباقات (فقط المنتجات من نوع باقة)
+    # ملاحظة: لا يوجد حقل category في Products، سنستخدم الاسم كتمييز مؤقت
     c.execute("""
-        SELECT SUM(total_price) 
-        FROM Sales 
-        WHERE shift_id = ? 
-        AND (visit_id IS NULL OR visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+        SELECT SUM(S.total_price) as cafeteria_sales
+        FROM Sales S
+        JOIN Products P ON S.product_id = P.product_id
+        WHERE S.shift_id = ?
+          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+          AND (P.name NOT LIKE '%باقة%')
     """, (shift_id,))
-    rev_sales = c.fetchone()[0] or 0
+    cafeteria_sales = c.fetchone()[0] or 0
+
+    c.execute("""
+        SELECT SUM(S.total_price) as package_sales
+        FROM Sales S
+        JOIN Products P ON S.product_id = P.product_id
+        WHERE S.shift_id = ?
+          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+          AND (P.name LIKE '%باقة%')
+    """, (shift_id,))
+    package_sales = c.fetchone()[0] or 0
     
     # 3. المصروفات
     c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
@@ -880,7 +902,7 @@ def shift_summary_preview():
     except sqlite3.OperationalError:
         manual_discounts = 0
     
-    net_cash = (rev_hours_total + rev_sales) - expenses - total_discounts
+    net_cash = (rev_hours_total + cafeteria_sales + package_sales) - expenses - total_discounts
 
     # 5. ─── تفاصيل كل زيارة (الجدول التفصيلي) ───
     c.execute("""
@@ -902,7 +924,10 @@ def shift_summary_preview():
     raw_visits = c.fetchall()
 
     # لكل زيارة نجيب مبيعاتها من الكافيتريا
-    visits_detail = []
+    # فصل الزيارات: خرجوا vs لسه جوا
+    checked_out_visits = []
+    still_inside_visits = []
+
     for v in raw_visits:
         c.execute("""
             SELECT P.name, SL.quantity, SL.total_price
@@ -915,24 +940,45 @@ def shift_summary_preview():
         ) if sale_items else "—"
         sales_total = sum(row['total_price'] for row in sale_items)
 
-        visits_detail.append({
+        check_in_fmt = "—"
+        if v['check_in_time']:
+            try:
+                check_in_fmt = datetime.datetime.strptime(v['check_in_time'], "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+            except ValueError:
+                check_in_fmt = str(v['check_in_time'])
+
+        check_out_fmt = "(لم يخرج بعد)"
+        if v['check_out_time']:
+            try:
+                check_out_fmt = datetime.datetime.strptime(v['check_out_time'], "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+            except ValueError:
+                check_out_fmt = str(v['check_out_time'])
+
+        entry = {
             'student_name':   v['student_name'],
             'room_name':      v['room_name'],
-            'check_in_time':  v['check_in_time'],
-            'check_out_time': v['check_out_time'] or '(لم يخرج بعد)',
+            'check_in_time':  check_in_fmt,
+            'check_out_time': check_out_fmt,
             'duration_hours': round(v['duration_hours'] or 0, 2),
             'total_cost':     v['total_cost'] or 0,
             'payment_method': v['payment_method'] or '—',
             'sales_summary':  sales_summary,
             'sales_total':    sales_total,
-        })
+            'is_checked_out': v['check_out_time'] is not None,
+        }
+
+        if v['check_out_time']:
+            checked_out_visits.append(entry)
+        else:
+            still_inside_visits.append(entry)
 
     conn.close()
     
     summary = {
         'rev_shared':       rev_shared,
         'rev_private':      rev_private,
-        'rev_sales':        rev_sales,
+        'cafeteria_sales':  cafeteria_sales,
+        'package_sales':    package_sales,
         'expenses':         expenses,
         'discounts':        total_discounts,
         'manual_discounts': manual_discounts,
@@ -941,7 +987,9 @@ def shift_summary_preview():
         'employee':         session.get('username'),
     }
 
-    return render_template('shift_summary_preview.html', summary=summary, visits_detail=visits_detail)
+    return render_template('shift_summary_preview.html', summary=summary,
+                           checked_out_visits=checked_out_visits,
+                           still_inside_visits=still_inside_visits)
 @app.route("/add_sale/<int:visit_id>", methods=['GET', 'POST'])
 def add_sale(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -1125,14 +1173,46 @@ def sell_subscription():
         elif 'confirm_sub' in request.form:
             sid = request.form['student_id']
             tid = request.form['type_id']
+
+            if not sid:
+                c.execute("SELECT * FROM MembershipTypes")
+                types = c.fetchall()
+                flash("يرجى اختيار الطالب أولاً قبل تفعيل الباقة.", "error")
+                return render_template('sell_subscription.html', students=[], types=types)
+
+            shift_id = session.get('active_shift_id')
+            if not shift_id:
+                flash("لا يمكن بيع الباقة بدون وردية مفتوحة.", "error")
+                return redirect(url_for('dashboard'))
+
             c.execute("SELECT * FROM MembershipTypes WHERE type_id=?", (tid,))
             pkg = c.fetchone()
+            if not pkg:
+                flash("نوع الباقة غير موجود.", "error")
+                return redirect(url_for('sell_subscription'))
+
             start = datetime.datetime.now()
             end = start + datetime.timedelta(days=pkg['days_valid'])
             c.execute("INSERT INTO StudentSubscriptions (student_id, type_id, start_date, end_date, remaining_hours) VALUES (?, ?, ?, ?, ?)",
                       (sid, tid, start, end, pkg['total_hours']))
-            if 'active_shift_id' in session:
-                c.execute("UPDATE Shifts SET revenue_hours = revenue_hours + ? WHERE shift_id=?", (pkg['price'], session['active_shift_id']))
+
+            # تسجيل بيع الباقة في جدول المبيعات ليظهر في إجمالي كاش الوردية.
+            c.execute("SELECT product_id FROM Products WHERE name = ?", ('اشتراك باقة',))
+            package_product = c.fetchone()
+            if package_product:
+                package_product_id = package_product['product_id']
+            else:
+                c.execute(
+                    "INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
+                    ('اشتراك باقة', 0.0, 0.0, 0)
+                )
+                package_product_id = c.lastrowid
+
+            c.execute(
+                "INSERT INTO Sales (product_id, user_id, shift_id, quantity, total_price, visit_id) VALUES (?, ?, ?, ?, ?, NULL)",
+                (package_product_id, session['user_id'], shift_id, 1, pkg['price'])
+            )
+
             conn.commit()
             flash("تم تفعيل الباقة", "success")
             return redirect(url_for('dashboard'))

@@ -111,7 +111,11 @@
         </div>
         <div class="card blue">
             <div class="card-label">+ مبيعات الكافيتريا</div>
-            <div class="card-value">{{ "%.2f"|format(summary.rev_sales) }} ج</div>
+            <div class="card-value">{{ "%.2f"|format(summary.cafeteria_sales) }} ج</div>
+        </div>
+        <div class="card blue">
+            <div class="card-label">+ مبيعات الباقات</div>
+            <div class="card-value">{{ "%.2f"|format(summary.package_sales) }} ج</div>
         </div>
         <div class="card red">
             <div class="card-label">− المصروفات</div>
@@ -123,18 +127,18 @@
         </div>
     </div>
 
-    {# ─── Detailed Visits Table ─── #}
-    <div class="section-title">📋 تفاصيل الزيارات ({{ visits_detail|length }} زيارة)</div>
+    {# ─── جدول الزيارات المغلقة (محسوبة في الصافي) ─── #}
+    <div class="section-title" style="border-color:#28a745;">✅ الزيارات المغلقة — محسوبة في الصافي ({{ checked_out_visits|length }} زيارة)</div>
 
-    {% if visits_detail %}
+    {% if checked_out_visits %}
     <table class="visits-table">
         <thead>
             <tr>
                 <th>#</th>
                 <th>اسم الطالب</th>
-                <th>القاعة</th>
                 <th>وقت الدخول</th>
                 <th>وقت الخروج</th>
+                <th>القاعة</th>
                 <th>المدة (ساعة)</th>
                 <th>طريقة الدفع</th>
                 <th>تكلفة الوقت</th>
@@ -143,15 +147,13 @@
             </tr>
         </thead>
         <tbody>
-            {% for v in visits_detail %}
-            <tr class="{{ 'still-inside' if '(لم يخرج بعد)' in v.check_out_time else '' }}">
+            {% for v in checked_out_visits %}
+            <tr>
                 <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
                 <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ v.student_name }}</td>
-                <td>{{ v.room_name }}</td>
                 <td style="font-size:12px; color:#0d6efd;">{{ v.check_in_time }}</td>
-                <td style="font-size:12px; color:{% if '(لم يخرج بعد)' in v.check_out_time %}#856404{% else %}#dc3545{% endif %};">
-                    {{ v.check_out_time }}
-                </td>
+                <td style="font-size:12px; color:#dc3545;">{{ v.check_out_time }}</td>
+                <td>{{ v.room_name }}</td>
                 <td>{{ v.duration_hours }}</td>
                 <td>
                     {% if v.payment_method == 'cash' %}
@@ -170,8 +172,50 @@
         </tbody>
     </table>
     {% else %}
-        <p style="color:#6c757d; text-align:center; padding:20px;">لا توجد زيارات في هذه الوردية حتى الآن.</p>
+        <p style="color:#6c757d; text-align:center; padding:20px;">لا توجد زيارات مغلقة حتى الآن.</p>
     {% endif %}
+
+    {# ─── جدول الطلاب اللسه جوا (غير محسوبة) ─── #}
+    {% if still_inside_visits %}
+    <div style="margin-top:28px; padding:14px 18px; background:#fff3cd; border:1px solid #ffc107; border-radius:10px;">
+        <div class="section-title" style="border-color:#ffc107; margin-top:0;">
+            ⏳ طلاب لسه جوا — <span style="color:#dc3545;">غير محسوبة في الصافي</span> ({{ still_inside_visits|length }} طالب)
+        </div>
+        <p style="font-size:13px; color:#856404; margin:0 0 12px;">
+            ⚠️ مبيعات وتكاليف الطلاب دول <strong>مش داخلة</strong> في حسابات الوردية الحالية.
+            هيتحاسبوا لما يسجلوا خروج (في الوردية القادمة لو لسه قاعدين).
+        </p>
+        <table class="visits-table" style="border:2px solid #ffc107;">
+            <thead>
+                <tr style="background:#856404;">
+                    <th>#</th>
+                    <th>اسم الطالب</th>
+                    <th>وقت الدخول</th>
+                    <th>وقت الخروج</th>
+                    <th>القاعة</th>
+                    <th>طلبات الكافيتريا</th>
+                    <th>إجمالي الكافيتريا (معلّق)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in still_inside_visits %}
+                <tr style="background:#fffbe6;">
+                    <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
+                    <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ v.student_name }}</td>
+                    <td style="font-size:12px; color:#0d6efd;">{{ v.check_in_time }}</td>
+                    <td style="font-size:12px; color:#dc3545;">{{ v.check_out_time }}</td>
+                    <td>{{ v.room_name }}</td>
+                    <td style="font-size:12px; color:#6c757d; text-align:right; padding-right:8px;">{{ v.sales_summary }}</td>
+                    <td style="color:#856404;">
+                        {% if v.sales_total > 0 %}{{ "%.2f"|format(v.sales_total) }} ج{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
 
     {# ─── Action Buttons ─── #}
     <div style="
