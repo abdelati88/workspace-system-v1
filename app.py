@@ -1,4 +1,5 @@
 import os
+import openpyxl  # Ensure PyInstaller bundles the Excel engine
 import sys
 import webbrowser
 from threading import Timer
@@ -1288,7 +1289,6 @@ def import_students():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    import openpyxl
 
     # الأعمدة المطلوبة بالترتيب (يجب أن تكون موجودة في الصف الأول)
     REQUIRED_COLS = {'name', 'phone', 'college', 'year'}
@@ -1302,6 +1302,8 @@ def import_students():
         flash("⚠️ الملف يجب أن يكون بصيغة Excel (.xlsx أو .xls).", "error")
         return redirect(url_for('manage_students'))
 
+    conn = None
+    wb = None
     try:
         wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
         ws = wb.active
@@ -1370,8 +1372,6 @@ def import_students():
             inserted += 1
 
         conn.commit()
-        conn.close()
-        wb.close()
 
         # رسالة النتيجة
         msg_parts = []
@@ -1388,7 +1388,15 @@ def import_students():
         flash(final_msg, "success" if inserted else "warning")
 
     except Exception as e:
-        flash(f"❌ خطأ أثناء قراءة الملف: {str(e)}", "error")
+        if conn:
+            conn.rollback()
+        flash(f"حدث خطأ أثناء الاستيراد: {str(e)}", "error")
+        return redirect(url_for('manage_students'))
+    finally:
+        if conn:
+            conn.close()
+        if wb:
+            wb.close()
 
     return redirect(url_for('manage_students'))
 
