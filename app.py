@@ -917,6 +917,7 @@ def shift_summary_preview():
             V.check_out_time,
             V.duration_hours,
             V.total_cost,
+            V.total_discount,
             V.payment_method,
             V.visit_id
         FROM Visits V
@@ -965,6 +966,7 @@ def shift_summary_preview():
             'check_out_time': check_out_fmt,
             'duration_hours': round(v['duration_hours'] or 0, 2),
             'total_cost':     v['total_cost'] or 0,
+            'total_discount': v['total_discount'] or 0,
             'payment_method': v['payment_method'] or '—',
             'sales_summary':  sales_summary,
             'sales_total':    sales_total,
@@ -1363,8 +1365,8 @@ def import_students():
         errors = []
 
         for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-            name    = str(row[col_map['name']]).strip()   if row[col_map['name']]    else ''
-            phone   = str(row[col_map['phone']]).strip()  if row[col_map['phone']]   else ''
+            name    = str(row[col_map['name']]).replace('\u00a0', ' ').strip()   if row[col_map['name']]    else ''
+            phone   = str(row[col_map['phone']]).replace('\u00a0', '').strip()  if row[col_map['phone']]   else ''
             college = str(row[col_map['college']]).strip() if row[col_map['college']] else ''
             year    = str(row[col_map['year']]).strip()   if row[col_map['year']]    else ''
 
@@ -1387,8 +1389,8 @@ def import_students():
                 errors.append(f"صف {row_num}: رقم التليفون فارغ (الطالب: {name})")
                 continue
 
-            # التحقق من التكرار (نفس رقم التليفون)
-            c.execute("SELECT student_id FROM Students WHERE phone = ?", (phone,))
+            # التحقق من التكرار (نفس رقم التليفون) مع تجاهل المسافات الطرفية
+            c.execute("SELECT student_id FROM Students WHERE TRIM(phone) = ?", (phone,))
             if c.fetchone():
                 skipped_dup += 1
                 continue
@@ -1426,6 +1428,38 @@ def import_students():
             conn.close()
         if wb:
             wb.close()
+
+    return redirect(url_for('manage_students'))
+
+
+@app.route('/clean_duplicates')
+def clean_duplicates():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db()
+    c = conn.cursor()
+
+    try:
+        c.execute("""
+            DELETE FROM Students
+            WHERE student_id NOT IN (
+                SELECT MIN(student_id)
+                FROM Students
+                WHERE phone IS NOT NULL AND TRIM(phone) <> ''
+                GROUP BY TRIM(phone)
+            )
+            AND phone IS NOT NULL
+            AND TRIM(phone) <> ''
+        """)
+        deleted_count = c.rowcount
+        conn.commit()
+        flash(f"✅ تم حذف {deleted_count} طالب مكرر بنجاح.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"❌ حدث خطأ أثناء حذف التكرارات: {str(e)}", "error")
+    finally:
+        conn.close()
 
     return redirect(url_for('manage_students'))
 
