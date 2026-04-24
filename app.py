@@ -1441,20 +1441,90 @@ def clean_duplicates():
     c = conn.cursor()
 
     try:
+        c.execute("BEGIN")
+
+        # نجلب فقط الأسماء المكررة لتقليل حجم المعالجة
         c.execute("""
-            DELETE FROM Students
-            WHERE student_id NOT IN (
-                SELECT MIN(student_id)
-                FROM Students
-                WHERE phone IS NOT NULL AND TRIM(phone) <> ''
-                GROUP BY TRIM(phone)
-            )
-            AND phone IS NOT NULL
-            AND TRIM(phone) <> ''
+            SELECT
+                student_id,
+                TRIM(name) AS norm_name,
+                TRIM(COALESCE(phone, '')) AS norm_phone
+            FROM Students
+            WHERE TRIM(COALESCE(name, '')) <> ''
+              AND TRIM(name) IN (
+                    SELECT TRIM(name)
+                    FROM Students
+                    WHERE TRIM(COALESCE(name, '')) <> ''
+                    GROUP BY TRIM(name)
+                    HAVING COUNT(*) > 1
+              )
+            ORDER BY norm_name, student_id
         """)
-        deleted_count = c.rowcount
+        rows = c.fetchall()
+
+        by_name = {}
+        for row in rows:
+            raw_phone = row['norm_phone']
+            normalized_phone = raw_phone.replace(' ', '')
+            by_name.setdefault(row['norm_name'], []).append({
+                'student_id': row['student_id'],
+                'raw_phone': raw_phone,
+                'phone': normalized_phone
+            })
+
+        to_delete = set()
+
+        for _, group in by_name.items():
+            # (1) حذف التكرارات المطابقة تماماً (name + phone)
+            phone_buckets = {}
+            for rec in group:
+                phone_buckets.setdefault(rec['phone'], []).append(rec['student_id'])
+
+            for ids in phone_buckets.values():
+                ids.sort()
+                if len(ids) > 1:
+                    to_delete.update(ids[1:])
+
+            # (2) حذف الرقم المعكوس إذا كان نفس الاسم
+            active = [rec for rec in group if rec['student_id'] not in to_delete]
+            phone_to_rec = {}
+            for rec in active:
+                p = rec['phone']
+                if p and p not in phone_to_rec:
+                    phone_to_rec[p] = rec
+
+            for phone, rec in list(phone_to_rec.items()):
+                reversed_phone = phone[::-1]
+                if not phone or reversed_phone == phone:
+                    continue
+                if reversed_phone not in phone_to_rec:
+                    continue
+
+                # لمنع فحص نفس الزوج مرتين
+                if phone > reversed_phone:
+                    continue
+
+                rec_a = rec
+                rec_b = phone_to_rec[reversed_phone]
+
+                # القرار يعتمد على الرقم بدون مسافات
+                a_starts_zero = rec_a['phone'].startswith('0')
+                b_starts_zero = rec_b['phone'].startswith('0')
+
+                if a_starts_zero and not b_starts_zero:
+                    to_delete.add(rec_b['student_id'])
+                elif b_starts_zero and not a_starts_zero:
+                    to_delete.add(rec_a['student_id'])
+
+        if to_delete:
+            c.executemany(
+                "DELETE FROM Students WHERE student_id = ?",
+                [(sid,) for sid in sorted(to_delete)]
+            )
+
+        deleted_count = len(to_delete)
         conn.commit()
-        flash(f"✅ تم حذف {deleted_count} طالب مكرر بنجاح.", "success")
+        flash(f"✅ تم حذف {deleted_count} سجل مكرر بنجاح.", "success")
     except Exception as e:
         conn.rollback()
         flash(f"❌ حدث خطأ أثناء حذف التكرارات: {str(e)}", "error")
