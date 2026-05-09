@@ -571,7 +571,16 @@ def perform_check_in():
 
     conn = get_db()
     c = conn.cursor()
-    c.execute("""INSERT INTO Visits (student_id, user_id, shift_id, room_id, check_in_time) 
+
+    c.execute("""SELECT visit_id FROM Visits
+                 WHERE student_id = ? AND check_out_time IS NULL
+                 LIMIT 1""", (sid,))
+    if c.fetchone():
+        conn.close()
+        flash("هذا الطالب متواجد بالفعل في النظام ولم يسجل خروج", "error")
+        return redirect(url_for('check_in'))
+
+    c.execute("""INSERT INTO Visits (student_id, user_id, shift_id, room_id, check_in_time)
                  VALUES (?, ?, ?, ?, ?)""",
               (sid, session['user_id'], session['active_shift_id'], rid, check_in_time))
     conn.commit()
@@ -891,6 +900,39 @@ def shift_summary_preview():
           AND (P.name LIKE '%باقة%')
     """, (shift_id,))
     package_sales = c.fetchone()[0] or 0
+
+    # 2.b — تفصيلة الكافيتريا: كل صنف × نوع البيع (نقدي أو مضاف لزيارة)
+    # نفس فلتر مبيعات الكافيتريا (كاش مباشر + زيارات اتقفلت في الوردية دي)
+    # عشان مجموع الـ cash + visit يطابق إجمالي الكارت اللي فوق بالظبط.
+    c.execute("""
+        SELECT P.name           AS product_name,
+               CASE WHEN S.visit_id IS NULL THEN 'cash' ELSE 'visit' END AS sale_type,
+               SUM(S.quantity)  AS total_qty,
+               SUM(S.total_price) AS total_revenue
+        FROM Sales S
+        JOIN Products P ON S.product_id = P.product_id
+        WHERE S.shift_id = ?
+          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+          AND (P.name NOT LIKE '%باقة%')
+        GROUP BY P.product_id, P.name,
+                 CASE WHEN S.visit_id IS NULL THEN 1 ELSE 0 END
+        ORDER BY sale_type ASC, total_revenue DESC
+    """, (shift_id,))
+    cafeteria_breakdown = []
+    cafeteria_cash_total = 0.0
+    cafeteria_visit_total = 0.0
+    for row in c.fetchall():
+        revenue = row['total_revenue'] or 0
+        cafeteria_breakdown.append({
+            'product_name':  row['product_name'],
+            'sale_type':     row['sale_type'],
+            'total_qty':     row['total_qty'] or 0,
+            'total_revenue': revenue,
+        })
+        if row['sale_type'] == 'cash':
+            cafeteria_cash_total += revenue
+        else:
+            cafeteria_visit_total += revenue
     
     # 3. المصروفات
     c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
@@ -909,8 +951,11 @@ def shift_summary_preview():
     net_cash = (rev_hours_total + cafeteria_sales + package_sales) - expenses - total_discounts
 
     # 5. ─── تفاصيل كل زيارة (الجدول التفصيلي) ───
+    # نجيب: (أ) كل زيارات الوردية الحالية (مقفولة أو مفتوحة)
+    #       (ب) أي زيارة لسه مفتوحة من ورديات قديمة (الـ "ghost visits")
+    # عشان الموظف يشوف كل اللي فعلياً جوا المكان ويقدر يقفلهم.
     c.execute("""
-        SELECT 
+        SELECT
             S.name        AS student_name,
             R.name        AS room_name,
             V.check_in_time,
@@ -919,11 +964,12 @@ def shift_summary_preview():
             V.total_cost,
             V.total_discount,
             V.payment_method,
-            V.visit_id
+            V.visit_id,
+            V.shift_id
         FROM Visits V
         JOIN Students S ON V.student_id = S.student_id
         JOIN Rooms    R ON V.room_id    = R.room_id
-        WHERE V.shift_id = ?
+        WHERE V.shift_id = ? OR V.check_out_time IS NULL
         ORDER BY V.check_in_time ASC
     """, (shift_id,))
     raw_visits = c.fetchall()
@@ -984,6 +1030,8 @@ def shift_summary_preview():
         'rev_shared':       rev_shared,
         'rev_private':      rev_private,
         'cafeteria_sales':  cafeteria_sales,
+        'cafeteria_cash':   cafeteria_cash_total,
+        'cafeteria_visit':  cafeteria_visit_total,
         'package_sales':    package_sales,
         'expenses':         expenses,
         'discounts':        total_discounts,
@@ -995,7 +1043,8 @@ def shift_summary_preview():
 
     return render_template('shift_summary_preview.html', summary=summary,
                            checked_out_visits=checked_out_visits,
-                           still_inside_visits=still_inside_visits)
+                           still_inside_visits=still_inside_visits,
+                           cafeteria_breakdown=cafeteria_breakdown)
 @app.route("/add_sale/<int:visit_id>", methods=['GET', 'POST'])
 def add_sale(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))

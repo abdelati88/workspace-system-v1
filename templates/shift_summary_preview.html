@@ -37,6 +37,30 @@
     .card.blue   { border-color: #007bff; }
     .card .card-label { font-size: 12px; color: #6c757d; margin-bottom: 6px; }
     .card .card-value { font-size: 22px; font-weight: bold; color: #212529; }
+    .card .card-sub {
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px dashed #e9ecef;
+        font-size: 11.5px;
+        color: #6c757d;
+        line-height: 1.6;
+    }
+    .card .card-sub .pipe { color: #ced4da; margin: 0 4px; }
+    .card .card-sub strong { color: #343a40; }
+
+    /* ─── Sale-type badges ─── */
+    .badge-sale-cash {
+        background: #d1ecf1; color: #0c5460;
+        border: 1px solid #bee5eb;
+        border-radius: 4px; padding: 3px 9px;
+        font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-sale-visit {
+        background: #e2d9f3; color: #432874;
+        border: 1px solid #d6c9ee;
+        border-radius: 4px; padding: 3px 9px;
+        font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
 
     /* ─── Visits Table ─── */
     .section-title {
@@ -77,11 +101,60 @@
     .btn-confirm { background: #dc3545; color: white; }
     .btn-back    { background: #6c757d; color: white; }
 
+    /* ─── Collapsible Cafeteria Details ─── */
+    .cafeteria-details { margin: 24px 0 12px; }
+    .cafeteria-details > summary {
+        list-style: none;
+        cursor: pointer;
+        background: white;
+        border-right: 4px solid #17a2b8;
+        border-radius: 8px;
+        padding: 14px 18px;
+        font-size: 16px; font-weight: bold; color: #343a40;
+        display: flex; align-items: center; gap: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        transition: background .15s, box-shadow .15s;
+        user-select: none;
+    }
+    .cafeteria-details > summary::-webkit-details-marker { display: none; }
+    .cafeteria-details > summary::marker { content: ""; }
+    .cafeteria-details > summary:hover {
+        background: #f1fbfd;
+        box-shadow: 0 3px 10px rgba(23,162,184,0.18);
+    }
+    .cafeteria-summary-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 50%;
+        background: #17a2b8; color: white;
+        font-size: 20px; font-weight: bold; line-height: 1;
+        transition: transform .25s ease;
+    }
+    .cafeteria-details[open] > summary .cafeteria-summary-icon {
+        transform: rotate(45deg); /* "+" → "×" — يدل على إمكانية الإغلاق */
+    }
+    .cafeteria-summary-count {
+        font-size: 13px; font-weight: normal; color: #6c757d; margin-right: 6px;
+    }
+    .cafeteria-details .label-hide { display: none; }
+    .cafeteria-details[open] .label-show { display: none; }
+    .cafeteria-details[open] .label-hide { display: inline; }
+    .cafeteria-details[open] .cafeteria-table {
+        animation: cafeteriaReveal .28s ease-out;
+    }
+    @keyframes cafeteriaReveal {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .cafeteria-details .cafeteria-table { margin-top: 12px; }
+
     /* ─── Print styles ─── */
     @media print {
         .actions, nav, .sidebar, .flash-messages { display: none !important; }
         .preview-wrapper { max-width: 100%; }
         .shift-header { background: #343a40 !important; -webkit-print-color-adjust: exact; }
+        /* اطبع الجدول دايماً مفتوح */
+        .cafeteria-details > summary { display: none; }
+        .cafeteria-details .cafeteria-table { display: table !important; animation: none; }
     }
 </style>
 
@@ -112,6 +185,11 @@
         <div class="card blue">
             <div class="card-label">+ مبيعات الكافيتريا</div>
             <div class="card-value">{{ "%.2f"|format(summary.cafeteria_sales) }} ج</div>
+            <div class="card-sub">
+                نقدي: <strong>{{ "%.2f"|format(summary.cafeteria_cash) }} ج</strong>
+                <span class="pipe">|</span>
+                طلاب: <strong>{{ "%.2f"|format(summary.cafeteria_visit) }} ج</strong>
+            </div>
         </div>
         <div class="card blue">
             <div class="card-label">+ مبيعات الباقات</div>
@@ -126,6 +204,87 @@
             <div class="card-value">{{ "%.2f"|format(summary.discounts) }} ج</div>
         </div>
     </div>
+
+    {# ─── تفاصيل مبيعات الكافيتريا (قابلة للطي) ─── #}
+    {% if cafeteria_breakdown %}
+    <details class="cafeteria-details">
+        <summary>
+            <span class="cafeteria-summary-icon">+</span>
+            <span style="flex:1;">
+                🥤
+                <span class="label-show">عرض تفاصيل الكافيتريا</span>
+                <span class="label-hide">إخفاء تفاصيل الكافيتريا</span>
+                <span class="cafeteria-summary-count">({{ cafeteria_breakdown|length }} صنف)</span>
+            </span>
+        </summary>
+
+        <table class="visits-table cafeteria-table">
+            <thead>
+                <tr style="background:#17a2b8;">
+                    <th style="width:50px;">#</th>
+                    <th>الصنف</th>
+                    <th style="width:140px;">نوع البيع</th>
+                    <th style="width:140px;">الكمية المباعة</th>
+                    <th style="width:160px;">الإجمالي</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cafeteria_breakdown %}
+                <tr>
+                    <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
+                    <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ item.product_name }}</td>
+                    <td>
+                        {% if item.sale_type == 'cash' %}
+                            <span class="badge-sale-cash">💵 بيع نقدي</span>
+                        {% else %}
+                            <span class="badge-sale-visit">👤 مضاف لزيارة</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.total_qty }}</td>
+                    <td style="font-weight:bold; color:#0d6efd;">{{ "%.2f"|format(item.total_revenue) }} ج</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                {# صفوف فرعية لكل نوع — أول حاجة تطابق مع الكارت اللي فوق #}
+                <tr style="background:#f8f9fa; color:#495057;">
+                    <td colspan="2" style="text-align:left; padding:8px 14px;">
+                        إجمالي البيع النقدي
+                    </td>
+                    <td><span class="badge-sale-cash">💵 بيع نقدي</span></td>
+                    <td>{{ cafeteria_breakdown | selectattr('sale_type','equalto','cash') | sum(attribute='total_qty') }}</td>
+                    <td style="color:#0c5460; font-weight:bold;">
+                        {{ "%.2f"|format(summary.cafeteria_cash) }} ج
+                    </td>
+                </tr>
+                <tr style="background:#f8f9fa; color:#495057;">
+                    <td colspan="2" style="text-align:left; padding:8px 14px;">
+                        إجمالي مبيعات الطلاب
+                    </td>
+                    <td><span class="badge-sale-visit">👤 مضاف لزيارة</span></td>
+                    <td>{{ cafeteria_breakdown | selectattr('sale_type','equalto','visit') | sum(attribute='total_qty') }}</td>
+                    <td style="color:#432874; font-weight:bold;">
+                        {{ "%.2f"|format(summary.cafeteria_visit) }} ج
+                    </td>
+                </tr>
+                <tr style="background:#e9f7fa; font-weight:bold;">
+                    <td colspan="3" style="text-align:left; padding:10px 14px;">الإجمالي الكلي</td>
+                    <td style="padding:10px 8px;">
+                        {{ cafeteria_breakdown|sum(attribute='total_qty') }}
+                    </td>
+                    <td style="padding:10px 8px; color:#0d6efd;">
+                        {{ "%.2f"|format(cafeteria_breakdown|sum(attribute='total_revenue')) }} ج
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </details>
+    {% else %}
+        <div class="section-title" style="border-color:#17a2b8;">🥤 تفاصيل مبيعات الكافيتريا</div>
+        <p style="color:#6c757d; text-align:center; padding:20px; background:white; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+            لا توجد مبيعات كافيتريا في هذه الوردية حتى الآن.
+        </p>
+    {% endif %}
 
     {# ─── جدول الزيارات المغلقة (محسوبة في الصافي) ─── #}
     <div class="section-title" style="border-color:#28a745;">✅ الزيارات المغلقة — محسوبة في الصافي ({{ checked_out_visits|length }} زيارة)</div>
