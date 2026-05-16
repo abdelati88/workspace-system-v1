@@ -439,9 +439,10 @@ def register_student():
         college = request.form['college']
         year = request.form['year']
         next_url = request.form.get('next_url')
-        # --- (1) استلام وتنظيف الوقت اليدوي من الفورم ---
+        # --- (1) استلام وتنظيف الوقت والتاريخ اليدوي من الفورم ---
         raw_time = request.form.get('manual_time', '').strip()
-        print(f">>> DEBUG register_student: Manual Time Received: '{raw_time}'")
+        manual_date = request.form.get('manual_date', '').strip()
+        print(f">>> DEBUG register_student: Manual Time Received: '{raw_time}', Manual Date: '{manual_date}'")
 
         # نفس لوجيك perform_check_in: نتجاهل كلمة "None" أو format غلط
         clean_manual_time = ''
@@ -473,9 +474,9 @@ def register_student():
             flash(f"تم تسجيل {name} بنجاح", "success")
             conn.close()
             
-            # --- (2) تمرير الوقت اليدوي المنظف للخطوة التالية ---
+            # --- (2) تمرير الوقت والتاريخ اليدوي المنظف للخطوة التالية ---
             if next_url == 'select_room': 
-                return redirect(url_for('select_room', student_id=sid, manual_time=clean_manual_time))
+                return redirect(url_for('select_room', student_id=sid, manual_time=clean_manual_time, manual_date=manual_date))
             
             if next_url == 'sell_sub': 
                 return redirect(url_for('sell_subscription', student_id=sid))
@@ -490,15 +491,17 @@ def register_student():
                            prefilled_phone=request.args.get('phone', ''), 
                            prefilled_name=request.args.get('name', ''), 
                            next_url=request.args.get('next', ''), 
-                           manual_time=request.args.get('manual_time', ''))
+                           manual_time=request.args.get('manual_time', ''),
+                           manual_date=request.args.get('manual_date', ''))
 @app.route("/check_in", methods=['GET', 'POST'])
 def check_in():
     if 'user_id' not in session: return redirect(url_for('login'))
     
     if request.method == 'POST':
         query = request.form['search_query']
-        # --- السطر الجديد لسحب الوقت اليدوي ---
+        # --- السطر الجديد لسحب الوقت والتاريخ اليدوي ---
         manual_time = request.form.get('manual_time') 
+        manual_date = request.form.get('manual_date')
         
         conn = get_db()
         c = conn.cursor()
@@ -512,15 +515,15 @@ def check_in():
             phone = query if query.isdigit() else ""
             name = query if not query.isdigit() else ""
             # بنبعت الوقت لصفحة التسجيل لو الطالب جديد
-            return redirect(url_for('register_student', phone=phone, name=name, next='select_room', manual_time=manual_time))
+            return redirect(url_for('register_student', phone=phone, name=name, next='select_room', manual_time=manual_time, manual_date=manual_date))
             
         elif len(students) == 1:
             # بنبعت الوقت لصفحة اختيار الغرفة عشان يستخدمه في الـ Insert النهائي
-            return redirect(url_for('select_room', student_id=students[0]['student_id'], manual_time=manual_time))
+            return redirect(url_for('select_room', student_id=students[0]['student_id'], manual_time=manual_time, manual_date=manual_date))
             
         else:
             # لو فيه كذا طالب بنفس الاسم، بنبعت الوقت لصفحة الاختيار
-            return render_template('select_student.html', students=students, manual_time=manual_time)
+            return render_template('select_student.html', students=students, manual_time=manual_time, manual_date=manual_date)
             
     return render_template('check_in.html')
 
@@ -529,8 +532,9 @@ def check_in():
 def select_room(student_id):
     if 'user_id' not in session: return redirect(url_for('login'))
     
-    # 1. السطر ده هو اللي "بيمسك" الوقت اللي جاي من الصفحة اللي فاتت
+    # 1. السطر ده هو اللي "بيمسك" الوقت والتاريخ اللي جاي من الصفحة اللي فاتت
     manual_time = request.args.get('manual_time', '') 
+    manual_date = request.args.get('manual_date', '')
     
     conn = get_db()
     c = conn.cursor()
@@ -548,7 +552,8 @@ def select_room(student_id):
     return render_template('select_room.html', 
                            rooms=rooms, 
                            student=student, 
-                           manual_time=manual_time)
+                           manual_time=manual_time,
+                           manual_date=manual_date)
     
 @app.route("/perform_check_in", methods=['POST'])
 def perform_check_in():
@@ -557,9 +562,10 @@ def perform_check_in():
     sid = request.form.get('student_id')
     rid = request.form.get('room_id')
     manual_time = request.form.get('manual_time', '').strip()
+    manual_date = request.form.get('manual_date', '').strip()
 
     # طباعة واضحة في التيرمينال للتشخيص
-    print(f">>> DEBUG: Manual Time Received: '{manual_time}'")
+    print(f">>> DEBUG: Manual Time Received: '{manual_time}', Manual Date Received: '{manual_date}'")
 
     check_in_time = None
 
@@ -577,12 +583,23 @@ def perform_check_in():
                 pass
                 
         if parsed_time is not None:
-            dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
-            
-            # معالجة تخطي منتصف الليل (إذا كان الوقت مستقبلياً، نفترض أنه بالأمس)
-            if dt_check_in > now:
-                print(f">>> DEBUG: Future time '{manual_time}' detected. Assuming yesterday.")
-                dt_check_in -= datetime.timedelta(days=1)
+            if manual_date and manual_date.lower() != 'none':
+                try:
+                    parsed_date = datetime.datetime.strptime(manual_date, "%Y-%m-%d").date()
+                    dt_check_in = datetime.datetime.combine(parsed_date, parsed_time)
+                    print(f">>> DEBUG: Explicit manual_date '{manual_date}' provided. Bypassing midnight boundary.")
+                except ValueError:
+                    print(f">>> DEBUG: Invalid manual_date format '{manual_date}'. Falling back to now.date()")
+                    dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
+                    if dt_check_in > now:
+                        dt_check_in -= datetime.timedelta(days=1)
+            else:
+                dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
+                
+                # معالجة تخطي منتصف الليل (إذا كان الوقت مستقبلياً، نفترض أنه بالأمس)
+                if dt_check_in > now:
+                    print(f">>> DEBUG: Future time '{manual_time}' detected with no manual_date. Assuming yesterday.")
+                    dt_check_in -= datetime.timedelta(days=1)
                 
             check_in_time = dt_check_in.strftime("%Y-%m-%d %H:%M:%S")
             print(f">>> DEBUG: Using MANUAL check_in_time: '{check_in_time}'")
@@ -1393,6 +1410,30 @@ def manage_students():
     conn.close()
     
     return render_template('manage_students.html', students=students, query=q)
+
+@app.route("/delete_student/<int:student_id>", methods=['POST'])
+def delete_student(student_id):
+    if 'user_id' not in session: return redirect(url_for('login'))
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # التحقق من عدم وجود زيارة نشطة للطالب
+    c.execute("SELECT visit_id FROM Visits WHERE student_id = ? AND check_out_time IS NULL", (student_id,))
+    active_visit = c.fetchone()
+    
+    if active_visit:
+        conn.close()
+        flash("لا يمكن حذف طالب متواجد حالياً في مساحة العمل. قم بإنهاء زيارته أولاً.", "error")
+        return redirect(url_for('manage_students'))
+        
+    # إذا لم يكن هناك زيارة نشطة، قم بحذفه
+    c.execute("DELETE FROM Students WHERE student_id = ?", (student_id,))
+    conn.commit()
+    conn.close()
+    
+    flash("تم حذف الطالب بنجاح", "success")
+    return redirect(url_for('manage_students'))
 
 
 @app.route("/import_students", methods=['POST'])

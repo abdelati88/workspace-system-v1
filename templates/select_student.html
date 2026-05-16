@@ -18,7 +18,7 @@
                     <span style="color: #555;">الكلية: {{ student.college or 'غير مسجلة' }}</span>
                 </div>
                 <div>
-                    <a href="{{ url_for('select_room', student_id=student.student_id) }}" 
+                    <a href="{{ url_for('select_room', student_id=student.student_id, manual_time=manual_time, manual_date=manual_date) }}"
                         style="padding: 10px 20px; ...">
                             اختيار
                         </a>

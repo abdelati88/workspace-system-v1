@@ -85,10 +85,19 @@
                     <td style="padding: 10px; border: 1px solid #ddd;">{{ student.year or '-' }}</td>
                     
                     <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
-                        <a href="{{ url_for('edit_student', student_id=student.student_id) }}" 
-                           style="padding: 5px 15px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">
-                            تعديل ✏️
-                        </a>
+                        <div style="display: flex; gap: 8px; justify-content: center;">
+                            <a href="{{ url_for('edit_student', student_id=student.student_id) }}" 
+                               style="padding: 5px 15px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                                تعديل ✏️
+                            </a>
+                            <form action="{{ url_for('delete_student', student_id=student.student_id) }}" method="POST" style="margin: 0;">
+                                <button type="submit" 
+                                        onclick="return confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟');"
+                                        style="padding: 5px 15px; background-color: #dc3545; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                                    حذف 🗑️
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

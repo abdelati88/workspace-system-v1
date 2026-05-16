@@ -10,6 +10,9 @@
 
        
         <div class="form-group" style="margin-bottom: 20px;">
+            <label for="manual_date" style="font-weight: bold; color: #d9534f;">تاريخ الدخول اليدوي (اختياري):</label>
+            <input type="date" id="manual_date" name="manual_date" class="form-control" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #d9534f; border-radius: 5px; margin-top: 5px; margin-bottom: 10px;" value="{{ request.args.get('manual_date', '') }}">
+            
             <label for="manual_time" style="font-weight: bold; color: #d9534f;">وقت الدخول اليدوي (اختياري):</label>
             <input type="time" id="manual_time" name="manual_time" class="form-control" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #d9534f; border-radius: 5px; margin-top: 5px;" value="{{ request.args.get('manual_time', '') }}">
             <small>سيبها فاضية لو عايز يسجل وقت اللحظة دي.</small>

@@ -9,6 +9,7 @@
     <form action="{{ url_for('perform_check_in') }}" method="POST">
     <input type="hidden" name="student_id" value="{{ student.student_id }}">
     <input type="hidden" name="manual_time" value="{{ manual_time }}">
+    <input type="hidden" name="manual_date" value="{{ manual_date }}">
     
         <div class="form-group" style="margin-bottom: 20px;">
             <label for="room_id" style="font-weight: bold; font-size: 18px;">الرجاء اختيار الأوضة:</label>
