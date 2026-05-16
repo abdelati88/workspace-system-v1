@@ -446,12 +446,22 @@ def register_student():
         # نفس لوجيك perform_check_in: نتجاهل كلمة "None" أو format غلط
         clean_manual_time = ''
         if raw_time and raw_time.lower() != 'none':
+            parsed_time = None
             try:
-                datetime.datetime.strptime(raw_time, "%H:%M")
+                parsed_time = datetime.datetime.strptime(raw_time.strip(), "%I:%M %p").time()
+            except ValueError:
+                try:
+                    parsed_time = datetime.datetime.strptime(raw_time.strip(), "%H:%M").time()
+                except ValueError:
+                    pass
+
+            if parsed_time is not None:
                 clean_manual_time = raw_time
                 print(f">>> DEBUG register_student: Valid manual_time: '{clean_manual_time}'")
-            except ValueError:
-                print(f">>> DEBUG register_student: Invalid format '{raw_time}', ignoring.")
+            else:
+                print(f">>> DEBUG register_student: Invalid format '{raw_time}', aborting.")
+                flash("صيغة الوقت غير صحيحة", "error")
+                return redirect(url_for('register_student', phone=phone, name=name, next=next_url, manual_time=raw_time))
         
         conn = get_db()
         c = conn.cursor()
@@ -553,20 +563,35 @@ def perform_check_in():
 
     check_in_time = None
 
+    now = datetime.datetime.now()
+
     # نتجاهل أي قيمة فارغة أو كلمة "None" كنص
     if manual_time and manual_time.lower() != 'none':
+        parsed_time = None
         try:
-            # نتحقق إن الوقت بالـ format الصح (HH:MM)
-            datetime.datetime.strptime(manual_time, "%H:%M")
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            check_in_time = f"{today} {manual_time}:00"
-            print(f">>> DEBUG: Using MANUAL check_in_time: '{check_in_time}'")
+            parsed_time = datetime.datetime.strptime(manual_time.strip(), "%I:%M %p").time()
         except ValueError:
-            print(f">>> DEBUG: Invalid time format '{manual_time}', falling back to now.")
-            check_in_time = None
-
-    if not check_in_time:
-        check_in_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                parsed_time = datetime.datetime.strptime(manual_time.strip(), "%H:%M").time()
+            except ValueError:
+                pass
+                
+        if parsed_time is not None:
+            dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
+            
+            # معالجة تخطي منتصف الليل (إذا كان الوقت مستقبلياً، نفترض أنه بالأمس)
+            if dt_check_in > now:
+                print(f">>> DEBUG: Future time '{manual_time}' detected. Assuming yesterday.")
+                dt_check_in -= datetime.timedelta(days=1)
+                
+            check_in_time = dt_check_in.strftime("%Y-%m-%d %H:%M:%S")
+            print(f">>> DEBUG: Using MANUAL check_in_time: '{check_in_time}'")
+        else:
+            print(f">>> DEBUG: Invalid time format '{manual_time}', aborting.")
+            flash("صيغة الوقت غير صحيحة", "error")
+            return redirect(url_for('select_room', student_id=sid))
+    else:
+        check_in_time = now.strftime("%Y-%m-%d %H:%M:%S")
         print(f">>> DEBUG: Using CURRENT TIME as check_in_time: '{check_in_time}'")
 
     conn = get_db()
@@ -1005,17 +1030,24 @@ def shift_summary_preview():
             except ValueError:
                 check_out_fmt = str(v['check_out_time'])
 
+        time_cost = v['total_cost'] or 0
+        total_discount = v['total_discount'] or 0
+        
+        # Calculate final total paid (time + cafeteria - discount)
+        total_paid = max(0, (time_cost + sales_total) - total_discount)
+
         entry = {
             'student_name':   v['student_name'],
             'room_name':      v['room_name'],
             'check_in_time':  check_in_fmt,
             'check_out_time': check_out_fmt,
             'duration_hours': round(v['duration_hours'] or 0, 2),
-            'total_cost':     v['total_cost'] or 0,
-            'total_discount': v['total_discount'] or 0,
+            'total_cost':     time_cost,
+            'total_discount': total_discount,
             'payment_method': v['payment_method'] or '—',
             'sales_summary':  sales_summary,
             'sales_total':    sales_total,
+            'total_paid':     total_paid,
             'is_checked_out': v['check_out_time'] is not None,
         }
 

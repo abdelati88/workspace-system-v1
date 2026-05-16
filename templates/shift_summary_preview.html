@@ -304,6 +304,7 @@
                 <th>الخصم</th>
                 <th>طلبات الكافيتريا</th>
                 <th>إجمالي الكافيتريا</th>
+                <th>إجمالي المدفوع</th>
             </tr>
         </thead>
         <tbody>
@@ -328,6 +329,7 @@
                 <td>{% if v.total_discount and v.total_discount > 0 %}{{ "%.2f"|format(v.total_discount) }} ج{% else %}—{% endif %}</td>
                 <td style="font-size:12px; color:#6c757d; text-align:right; padding-right:8px;">{{ v.sales_summary }}</td>
                 <td>{% if v.sales_total > 0 %}<strong>{{ "%.2f"|format(v.sales_total) }} ج</strong>{% else %}—{% endif %}</td>
+                <td style="font-weight:bold; color:#198754; font-size:14px; background:#e8f5e9;">{{ "%.2f"|format(v.total_paid) }} ج</td>
             </tr>
             {% endfor %}
         </tbody>
