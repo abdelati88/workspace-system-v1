@@ -3,136 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تسجيل الدخول - نظام الـ Workspace</title>
-    <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png"> <style>
-        /* Reset some default browser styles */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+    <title>تسجيل الدخول | تاسك</title>
+    <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #16233D;
+            --gold: #B98A2A;
+            --gold-light: #E4D2A6;
+            --paper: #F1E7D2;
+            --surface: #FBF8F2;
+            --line: #DDD2B8;
+            --muted: #7A7059;
+            --danger: #A23B32;
+            --danger-soft: #F2DCD8;
+            --success: #2F6F4E;
+            --success-soft: #DEEAE1;
         }
-
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* خط أحدث */
-            background: linear-gradient(to right, #22e77bff, #25f5fcff); /* خلفية متدرجة */
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 100vh; /* استخدم min-height عشان لو المحتوى زاد */
-            color: #333;
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        body {
+            font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+            background: var(--ink);
+            background-image: radial-gradient(circle at 15% 20%, rgba(185,138,42,0.16), transparent 45%),
+                               radial-gradient(circle at 85% 85%, rgba(43,95,160,0.18), transparent 45%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
         }
-        .login-container { 
-            background-color: #fff; 
-            padding: 40px; /* زيادة المساحة الداخلية */
-            border-radius: 12px; /* حواف دائرية أكتر */
-            box-shadow: 0 8px 25px rgba(0,0,0,0.2); /* ظل أوضح */
-            width: 350px; /* عرض أكبر شوية */
+        .login-card {
+            background: var(--surface);
+            width: 380px;
+            max-width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+            overflow: hidden;
+        }
+        .login-brand {
             text-align: center;
+            padding: 34px 30px 20px;
         }
-        .login-container h2 {
-            margin-bottom: 25px;
-            color: #333;
+        .login-brand img {
+            width: 68px;
+            height: 68px;
+            object-fit: contain;
+            margin-bottom: 10px;
         }
-        .logo {
-            width: 100px; /* حجم اللوجو */
-            height: 100px;
-            margin-bottom: 20px;
-            border-radius: 50%; /* عشان يبقى دائري لو حبيت */
-            object-fit: cover; /* عشان الصورة تتظبط جوا الحجم */
-            border: 2px solid #eee; /* إطار خفيف */
+        .login-brand h1 {
+            font-family: 'Amiri', serif;
+            font-weight: 700;
+            font-size: 1.6em;
+            color: var(--ink);
+            margin: 0 0 4px;
         }
-        .form-group {
-            margin-bottom: 20px;
-            text-align: right; /* عشان الليبل يبدأ من اليمين */
+        .login-brand p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.88em;
         }
+        .login-body { padding: 6px 30px 30px; }
+        .form-group { margin-bottom: 16px; text-align: right; }
         .form-group label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #555;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 0.88em;
+            color: var(--ink);
         }
         .form-group input {
             width: 100%;
-            padding: 12px; /* مساحة داخلية أكبر */
-            border: 1px solid #ddd;
-            border-radius: 6px; /* حواف دائرية أكتر */
-            font-size: 16px;
+            padding: 11px 13px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--ink);
         }
         .form-group input:focus {
-            border-color: #007bff; /* لون الإطار لما المستخدم يضغط */
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
-            outline: none; /* إزالة الإطار الأزرق الافتراضي */
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(185, 138, 42, 0.22);
+            outline: none;
         }
         .btn {
             width: 100%;
-            padding: 14px; /* مساحة داخلية أكبر للزرار */
-            background-color: #007bff;
-            color: white;
+            padding: 13px;
+            background-color: var(--ink);
+            color: var(--surface);
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 17px;
-            font-weight: bold;
-            transition: background-color 0.3s ease; /* حركة سلسة عند الهوفر */
+            font-size: 16px;
+            font-weight: 700;
+            font-family: inherit;
+            transition: background-color 0.15s ease;
         }
-        .btn:hover {
-            background-color: #0056b3;
-        }
-
-
+        .btn:hover { background-color: #223458; }
 
         .flash-message {
-    padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 6px;
-    font-weight: bold;
-    text-align: center;
-}
-.flash-message.error {
-    background-color: #f8d7da; /* أحمر فاتح */
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-.flash-message.success {
-    background-color: #d4edda; /* أخضر فاتح */
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9em;
+            text-align: right;
+            border-right: 4px solid transparent;
+        }
+        .flash-message.error {
+            background-color: var(--danger-soft);
+            color: var(--danger);
+            border-right-color: var(--danger);
+        }
+        .flash-message.success {
+            background-color: var(--success-soft);
+            color: var(--success);
+            border-right-color: var(--success);
+        }
+
+        .shutdown-row {
+            text-align: center;
+            padding: 14px 30px 26px;
+            border-top: 1px solid var(--line);
+        }
+        .shutdown-row button {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            padding: 6px 10px;
+        }
+        .shutdown-row button:hover { color: var(--danger); }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="شعار الـ Workspace" class="logo">
-        <h2>تسجيل الدخول</h2>
+    <div class="login-card">
+        <div class="login-brand">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="تاسك">
+            <h1>تسجيل الدخول</h1>
+            <p>مساحة تاسك للمذاكرة والعمل</p>
+        </div>
 
+        <div class="login-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class.="flash-message {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    <form method="POST">
-        <form method="POST">
-            <div class="form-group">
-                <label for="username">اسم المستخدم:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">كلمة المرور:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit" class="btn">دخول</button>
-        </form>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="username">اسم المستخدم</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">كلمة المرور</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn">دخول</button>
+            </form>
+        </div>
 
-        <div style="margin-top: 20px; text-align: center;">
-    <a href="{{ url_for('shutdown') }}" 
-       onclick="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');" 
-       style="display: inline-block; text-decoration: none; color: #dc3545; font-weight: bold; padding: 10px 20px; background: white; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-        🛑 إغلاق النظام نهائياً
-    </a>
-</div>
+        <div class="shutdown-row">
+            <form action="{{ url_for('shutdown') }}" method="POST"
+                  onsubmit="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit">إغلاق النظام نهائياً</button>
+            </form>
+        </div>
     </div>
 </body>
 </html>

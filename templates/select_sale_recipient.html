@@ -2,37 +2,30 @@
 {% block title %}لمن هذه العملية؟{% endblock %}
 
 {% block content %}
-    <h1>إضافة عملية بيع (كافيتريا)</h1>
-    <p>الرجاء تحديد لمن هذه العملية:</p>
-    <hr>
+    <h1 class="page-title">إضافة عملية بيع (كافيتريا)</h1>
+    <p class="page-subtitle">الرجاء تحديد لمن هذه العملية:</p>
 
     <!-- (الاختيار ب) بيع نقدي (كاش) -->
-    <div style="margin-bottom: 30px;">
+    <div class="panel">
         <h3>بيع نقدي (Cash Sale)</h3>
-        <p>لعميل غير مسجل أو بيع سريع بدون ربطه بطالب.</p>
-        <a href="{{ url_for('add_sale', visit_id=0) }}" 
-           style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
-            متابعة كـ "بيع نقدي"
-        </a>
+        <p style="color: var(--muted); font-size: 0.9em;">لعميل غير مسجل أو بيع سريع بدون ربطه بطالب.</p>
+        <a href="{{ url_for('add_sale', visit_id=0) }}" class="btn btn-primary">متابعة كـ "بيع نقدي"</a>
     </div>
 
-    <hr>
-
     <!-- (الاختيار أ) لستة الطلاب الموجودين -->
-    <div>
+    <div class="panel">
         <h3>بيع لطالب مسجل دخوله (Check-in)</h3>
         {% if active_visits %}
-            <div class="student-list" style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
                 {% for visit in active_visits %}
-                    <div class="student-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background-color: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-sm);">
                         <div>
-                            <strong style="font-size: 18px;">{{ visit.name }}</strong>
+                            <strong style="font-size: 1.1em;">{{ visit.name }}</strong>
                             <br>
-                            <span style="color: #555;">(موجود في: {{ visit.room_name }})</span>
+                            <span style="color: var(--muted);">(موجود في: {{ visit.room_name }})</span>
                         </div>
                         <div>
-                            <a href="{{ url_for('add_sale', visit_id=visit.visit_id) }}" 
-                               style="padding: 10px 20px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 5px;">
+                            <a href="{{ url_for('add_sale', visit_id=visit.visit_id) }}" class="btn btn-accent btn-sm">
                                 اختيار
                             </a>
                         </div>
@@ -40,12 +33,12 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p style="color: #555;">لا يوجد طلاب مسجلين دخول حالياً.</p>
+            <p style="color: var(--muted);">لا يوجد طلاب مسجلين دخول حالياً.</p>
         {% endif %}
     </div>
 
-    <a href="{{ url_for('dashboard') }}" style="margin-top: 30px; display: inline-block;">
-        &larr; إلغاء (العودة للرئيسية)
+    <a href="{{ url_for('dashboard') }}" class="btn-back">
+        إلغاء (العودة للرئيسية)
     </a>
 
 {% endblock %}

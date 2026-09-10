@@ -2,50 +2,48 @@
 {% block title %}تسجيل طالب جديد{% endblock %}
 
 {% block content %}
-    <h1>تسجيل طالب جديد</h1>
-    <hr>
+<h1 class="page-title">تسجيل طالب جديد</h1>
 
+<div class="panel" style="max-width: 560px; margin: 0 auto;">
     <form action="{{ url_for('register_student') }}" method="POST">
-     <input type="hidden" name="next_url" value="{{ next_url or '' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next_url" value="{{ next_url or '' }}">
 
-       
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="manual_date" style="font-weight: bold; color: #d9534f;">تاريخ الدخول اليدوي (اختياري):</label>
-            <input type="date" id="manual_date" name="manual_date" class="form-control" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #d9534f; border-radius: 5px; margin-top: 5px; margin-bottom: 10px;" value="{{ request.args.get('manual_date', '') }}">
-            
-            <label for="manual_time" style="font-weight: bold; color: #d9534f;">وقت الدخول اليدوي (اختياري):</label>
-            <input type="time" id="manual_time" name="manual_time" class="form-control" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #d9534f; border-radius: 5px; margin-top: 5px;" value="{{ request.args.get('manual_time', '') }}">
-            <small>سيبها فاضية لو عايز يسجل وقت اللحظة دي.</small>
+        <div class="panel" style="background: var(--warning-soft); border-color: rgba(179,106,30,0.3); margin-bottom: 18px;">
+            <div class="form-group">
+                <label for="manual_date" style="color: var(--warning);">تاريخ الدخول اليدوي (اختياري)</label>
+                <input type="date" id="manual_date" name="manual_date" value="{{ request.args.get('manual_date', '') }}">
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+                <label for="manual_time" style="color: var(--warning);">وقت الدخول اليدوي (اختياري)</label>
+                <input type="time" id="manual_time" name="manual_time" value="{{ request.args.get('manual_time', '') }}">
+            </div>
+            <p style="font-size: 0.82em; color: var(--warning); margin:0;">سيبها فاضية لو عايز يسجل وقت اللحظة دي.</p>
         </div>
 
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="name" style="font-weight: bold;">اسم الطالب:</label>
-            <input type="text" id="name" name="name" required style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;" value="{{ prefilled_name or '' }}">
+        <div class="form-group">
+            <label for="name">اسم الطالب:</label>
+            <input type="text" id="name" name="name" required value="{{ prefilled_name or '' }}">
         </div>
 
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="phone" style="font-weight: bold;">رقم التليفون:</label>
-            <input type="text" id="phone" name="phone" required style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;" value="{{ prefilled_phone or '' }}">
+        <div class="form-group">
+            <label for="phone">رقم التليفون:</label>
+            <input type="text" id="phone" name="phone" required value="{{ prefilled_phone or '' }}">
         </div>
 
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="college" style="font-weight: bold;">الكلية (اختياري):</label>
-            <input type="text" id="college" name="college" style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
+        <div class="form-group">
+            <label for="college">الكلية (اختياري):</label>
+            <input type="text" id="college" name="college">
         </div>
 
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="year" style="font-weight: bold;">الفرقة الدراسية:</label>
-            <input type="text" id="year" name="year" 
-                   placeholder="مثال: الأولي، الثانية، خريج..."
-                   style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
+        <div class="form-group">
+            <label for="year">الفرقة الدراسية:</label>
+            <input type="text" id="year" name="year" placeholder="مثال: الأولي، الثانية، خريج...">
         </div>
 
-        <button type="submit" style="font-size: 18px; padding: 12px 25px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            تسجيل الطالب
-        </button>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">تسجيل الطالب</button>
 
-        <a href="javascript:history.back()" class="btn-back">
-            &larr; رجوع (Back)
-        </a>
+        <a href="javascript:history.back()" class="btn-back" style="display:block; text-align:center;">رجوع</a>
     </form>
+</div>
 {% endblock %}

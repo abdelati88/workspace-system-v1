@@ -3,129 +3,38 @@
 
 {% block content %}
 <style>
-    /* ─── General ─── */
-    .preview-wrapper { max-width: 1100px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; direction: rtl; }
+    /* ─── page-specific wrapper ─── */
+    .preview-wrapper { max-width: 1100px; margin: 0 auto; }
 
-    /* ─── Header Card ─── */
-    .shift-header {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        color: white; border-radius: 14px; padding: 24px 30px;
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 24px;
-    }
-    .shift-header h2 { margin: 0; font-size: 22px; }
-    .shift-header .meta { font-size: 14px; color: #adb5bd; margin-top: 4px; }
-    .net-cash-badge {
-        background: #28a745; border-radius: 12px; padding: 12px 24px; text-align: center;
-    }
-    .net-cash-badge .label { font-size: 12px; color: #c3e6cb; }
-    .net-cash-badge .amount { font-size: 32px; font-weight: bold; }
-
-    /* ─── Summary Cards ─── */
-    .summary-cards {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 14px; margin-bottom: 28px;
-    }
-    .card {
-        background: white; border-radius: 10px; padding: 16px;
-        border-top: 4px solid #007bff; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        text-align: center;
-    }
-    .card.green  { border-color: #28a745; }
-    .card.red    { border-color: #dc3545; }
-    .card.orange { border-color: #fd7e14; }
-    .card.blue   { border-color: #007bff; }
-    .card .card-label { font-size: 12px; color: #6c757d; margin-bottom: 6px; }
-    .card .card-value { font-size: 22px; font-weight: bold; color: #212529; }
-    .card .card-sub {
-        margin-top: 8px;
-        padding-top: 6px;
-        border-top: 1px dashed #e9ecef;
-        font-size: 11.5px;
-        color: #6c757d;
-        line-height: 1.6;
-    }
-    .card .card-sub .pipe { color: #ced4da; margin: 0 4px; }
-    .card .card-sub strong { color: #343a40; }
-
-    /* ─── Sale-type badges ─── */
-    .badge-sale-cash {
-        background: #d1ecf1; color: #0c5460;
-        border: 1px solid #bee5eb;
-        border-radius: 4px; padding: 3px 9px;
-        font-size: 12px; font-weight: 600; white-space: nowrap;
-    }
-    .badge-sale-visit {
-        background: #e2d9f3; color: #432874;
-        border: 1px solid #d6c9ee;
-        border-radius: 4px; padding: 3px 9px;
-        font-size: 12px; font-weight: 600; white-space: nowrap;
-    }
-
-    /* ─── Visits Table ─── */
+    /* ─── section title (no shared-class equivalent) ─── */
     .section-title {
-        font-size: 17px; font-weight: bold; color: #343a40;
-        border-right: 4px solid #007bff; padding-right: 10px;
+        font-size: 17px; font-weight: bold; color: var(--ink);
+        border-right: 4px solid var(--blue); padding-right: 10px;
         margin: 24px 0 12px;
     }
-    .visits-table {
-        width: 100%; border-collapse: collapse;
-        font-size: 13.5px; background: white;
-        border-radius: 10px; overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    }
-    .visits-table thead tr {
-        background: #343a40; color: white; text-align: center;
-    }
-    .visits-table thead th { padding: 12px 8px; font-weight: 600; }
-    .visits-table tbody tr { border-bottom: 1px solid #e9ecef; transition: background .15s; }
-    .visits-table tbody tr:hover { background: #f8f9fa; }
-    .visits-table tbody td { padding: 10px 8px; text-align: center; vertical-align: middle; }
-    .visits-table tbody tr.still-inside { background: #fff9e6; }
-    .badge-cash { background:#d4edda; color:#155724; border-radius:4px; padding:2px 8px; font-size:12px; }
-    .badge-sub  { background:#cce5ff; color:#004085; border-radius:4px; padding:2px 8px; font-size:12px; }
-    .badge-open { background:#fff3cd; color:#856404; border-radius:4px; padding:2px 8px; font-size:12px; }
 
-    /* ─── Action Buttons ─── */
-    .actions {
-        display: flex; gap: 14px; margin-top: 30px; flex-wrap: wrap;
-    }
-    .btn {
-        padding: 13px 28px; border: none; border-radius: 8px;
-        font-size: 16px; font-weight: bold; cursor: pointer;
-        text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-        transition: opacity .2s, transform .1s;
-    }
-    .btn:hover { opacity: .88; transform: translateY(-1px); }
-    .btn-print   { background: #0d6efd; color: white; }
-    .btn-confirm { background: #dc3545; color: white; }
-    .btn-back    { background: #6c757d; color: white; }
-
-    /* ─── Collapsible Cafeteria Details ─── */
+    /* ─── collapsible cafeteria details (page-specific interaction) ─── */
     .cafeteria-details { margin: 24px 0 12px; }
     .cafeteria-details > summary {
         list-style: none;
         cursor: pointer;
-        background: white;
-        border-right: 4px solid #17a2b8;
-        border-radius: 8px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-right: 4px solid var(--info);
+        border-radius: var(--radius);
         padding: 14px 18px;
-        font-size: 16px; font-weight: bold; color: #343a40;
+        font-size: 16px; font-weight: bold; color: var(--ink);
         display: flex; align-items: center; gap: 12px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        transition: background .15s, box-shadow .15s;
+        transition: background .15s;
         user-select: none;
     }
     .cafeteria-details > summary::-webkit-details-marker { display: none; }
     .cafeteria-details > summary::marker { content: ""; }
-    .cafeteria-details > summary:hover {
-        background: #f1fbfd;
-        box-shadow: 0 3px 10px rgba(23,162,184,0.18);
-    }
+    .cafeteria-details > summary:hover { background: var(--paper); }
     .cafeteria-summary-icon {
         display: inline-flex; align-items: center; justify-content: center;
         width: 26px; height: 26px; border-radius: 50%;
-        background: #17a2b8; color: white;
+        background: var(--info); color: white;
         font-size: 20px; font-weight: bold; line-height: 1;
         transition: transform .25s ease;
     }
@@ -133,7 +42,7 @@
         transform: rotate(45deg); /* "+" → "×" — يدل على إمكانية الإغلاق */
     }
     .cafeteria-summary-count {
-        font-size: 13px; font-weight: normal; color: #6c757d; margin-right: 6px;
+        font-size: 13px; font-weight: normal; color: var(--muted); margin-right: 6px;
     }
     .cafeteria-details .label-hide { display: none; }
     .cafeteria-details[open] .label-show { display: none; }
@@ -149,10 +58,8 @@
 
     /* ─── Print styles ─── */
     @media print {
-        .actions, nav, .sidebar, .flash-messages { display: none !important; }
+        .actions, nav, .sidebar, .flash-messages, .no-print { display: none !important; }
         .preview-wrapper { max-width: 100%; }
-        .shift-header { background: #343a40 !important; -webkit-print-color-adjust: exact; }
-        /* اطبع الجدول دايماً مفتوح */
         .cafeteria-details > summary { display: none; }
         .cafeteria-details .cafeteria-table { display: table !important; animation: none; }
     }
@@ -161,47 +68,47 @@
 <div class="preview-wrapper">
 
     {# ─── Header ─── #}
-    <div class="shift-header">
+    <div class="panel" style="background: var(--ink); color: var(--surface); border-color: var(--ink); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
         <div>
-            <h2>👁️ مراجعة الوردية قبل الإغلاق</h2>
-            <div class="meta">موظف: {{ summary.employee }} &nbsp;|&nbsp; رقم الوردية: #{{ summary.shift_id }}</div>
+            <h2 style="color: var(--surface); margin:0;">👁️ مراجعة الوردية قبل الإغلاق</h2>
+            <div style="font-size: 14px; color: rgba(251,248,242,0.7); margin-top: 4px;">موظف: {{ summary.employee }} &nbsp;|&nbsp; رقم الوردية: #{{ summary.shift_id }}</div>
         </div>
-        <div class="net-cash-badge">
-            <div class="label">💰 الصافي المتوقع</div>
-            <div class="amount">{{ "%.2f"|format(summary.net_cash) }} ج</div>
+        <div style="background: var(--success); border-radius: var(--radius); padding: 12px 24px; text-align: center;">
+            <div style="font-size: 12px; color: var(--success-soft);">💰 الصافي المتوقع</div>
+            <div style="font-size: 32px; font-weight: bold; font-variant-numeric: tabular-nums;">{{ "%.2f"|format(summary.net_cash) }} ج</div>
         </div>
     </div>
 
     {# ─── Summary Cards ─── #}
-    <div class="summary-cards">
-        <div class="card green">
-            <div class="card-label">+ ساعات Shared</div>
-            <div class="card-value">{{ "%.2f"|format(summary.rev_shared) }} ج</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px;">
+        <div class="stat-tile" style="border-right-color: var(--success);">
+            <div class="stat-label">+ ساعات Shared</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.rev_shared) }} ج</div>
         </div>
-        <div class="card green">
-            <div class="card-label">+ ساعات Private</div>
-            <div class="card-value">{{ "%.2f"|format(summary.rev_private) }} ج</div>
+        <div class="stat-tile" style="border-right-color: var(--success);">
+            <div class="stat-label">+ ساعات Private</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.rev_private) }} ج</div>
         </div>
-        <div class="card blue">
-            <div class="card-label">+ مبيعات الكافيتريا</div>
-            <div class="card-value">{{ "%.2f"|format(summary.cafeteria_sales) }} ج</div>
-            <div class="card-sub">
-                نقدي: <strong>{{ "%.2f"|format(summary.cafeteria_cash) }} ج</strong>
-                <span class="pipe">|</span>
-                طلاب: <strong>{{ "%.2f"|format(summary.cafeteria_visit) }} ج</strong>
+        <div class="stat-tile" style="border-right-color: var(--blue);">
+            <div class="stat-label">+ مبيعات الكافيتريا</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.cafeteria_sales) }} ج</div>
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--muted); line-height: 1.6;">
+                نقدي: <strong style="color: var(--ink);">{{ "%.2f"|format(summary.cafeteria_cash) }} ج</strong>
+                <span style="color: var(--line); margin: 0 4px;">|</span>
+                طلاب: <strong style="color: var(--ink);">{{ "%.2f"|format(summary.cafeteria_visit) }} ج</strong>
             </div>
         </div>
-        <div class="card blue">
-            <div class="card-label">+ مبيعات الباقات</div>
-            <div class="card-value">{{ "%.2f"|format(summary.package_sales) }} ج</div>
+        <div class="stat-tile" style="border-right-color: var(--blue);">
+            <div class="stat-label">+ مبيعات الباقات</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.package_sales) }} ج</div>
         </div>
-        <div class="card red">
-            <div class="card-label">− المصروفات</div>
-            <div class="card-value">{{ "%.2f"|format(summary.expenses) }} ج</div>
+        <div class="stat-tile" style="border-right-color: var(--danger);">
+            <div class="stat-label">− المصروفات</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.expenses) }} ج</div>
         </div>
-        <div class="card orange">
-            <div class="card-label">− الخصومات</div>
-            <div class="card-value">{{ "%.2f"|format(summary.discounts) }} ج</div>
+        <div class="stat-tile" style="border-right-color: var(--warning);">
+            <div class="stat-label">− الخصومات</div>
+            <div class="stat-value" style="font-size: 1.3em;">{{ "%.2f"|format(summary.discounts) }} ج</div>
         </div>
     </div>
 
@@ -218,79 +125,82 @@
             </span>
         </summary>
 
-        <table class="visits-table cafeteria-table">
+        <div class="table-wrap cafeteria-table">
+        <table class="ledger">
             <thead>
-                <tr style="background:#17a2b8;">
+                <tr>
                     <th style="width:50px;">#</th>
                     <th>الصنف</th>
                     <th style="width:140px;">نوع البيع</th>
-                    <th style="width:140px;">الكمية المباعة</th>
-                    <th style="width:160px;">الإجمالي</th>
+                    <th style="width:140px;" class="num">الكمية المباعة</th>
+                    <th style="width:160px;" class="num">الإجمالي</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in cafeteria_breakdown %}
                 <tr>
-                    <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
-                    <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ item.product_name }}</td>
+                    <td style="color: var(--muted); font-size:12px;">{{ loop.index }}</td>
+                    <td style="font-weight:bold;">{{ item.product_name }}</td>
                     <td>
                         {% if item.sale_type == 'cash' %}
-                            <span class="badge-sale-cash">💵 بيع نقدي</span>
+                            <span class="badge badge-info">💵 بيع نقدي</span>
                         {% else %}
-                            <span class="badge-sale-visit">👤 مضاف لزيارة</span>
+                            <span class="badge badge-gold">👤 مضاف لزيارة</span>
                         {% endif %}
                     </td>
-                    <td>{{ item.total_qty }}</td>
-                    <td style="font-weight:bold; color:#0d6efd;">{{ "%.2f"|format(item.total_revenue) }} ج</td>
+                    <td class="num">{{ item.total_qty }}</td>
+                    <td class="num" style="color: var(--blue);">{{ "%.2f"|format(item.total_revenue) }} ج</td>
                 </tr>
                 {% endfor %}
             </tbody>
             <tfoot>
                 {# صفوف فرعية لكل نوع — أول حاجة تطابق مع الكارت اللي فوق #}
-                <tr style="background:#f8f9fa; color:#495057;">
-                    <td colspan="2" style="text-align:left; padding:8px 14px;">
+                <tr style="background: var(--paper);">
+                    <td colspan="2" style="text-align:left; font-weight:600;">
                         إجمالي البيع النقدي
                     </td>
-                    <td><span class="badge-sale-cash">💵 بيع نقدي</span></td>
-                    <td>{{ cafeteria_breakdown | selectattr('sale_type','equalto','cash') | sum(attribute='total_qty') }}</td>
-                    <td style="color:#0c5460; font-weight:bold;">
+                    <td><span class="badge badge-info">💵 بيع نقدي</span></td>
+                    <td class="num">{{ cafeteria_breakdown | selectattr('sale_type','equalto','cash') | sum(attribute='total_qty') }}</td>
+                    <td class="num" style="color: var(--info);">
                         {{ "%.2f"|format(summary.cafeteria_cash) }} ج
                     </td>
                 </tr>
-                <tr style="background:#f8f9fa; color:#495057;">
-                    <td colspan="2" style="text-align:left; padding:8px 14px;">
+                <tr style="background: var(--paper);">
+                    <td colspan="2" style="text-align:left; font-weight:600;">
                         إجمالي مبيعات الطلاب
                     </td>
-                    <td><span class="badge-sale-visit">👤 مضاف لزيارة</span></td>
-                    <td>{{ cafeteria_breakdown | selectattr('sale_type','equalto','visit') | sum(attribute='total_qty') }}</td>
-                    <td style="color:#432874; font-weight:bold;">
+                    <td><span class="badge badge-gold">👤 مضاف لزيارة</span></td>
+                    <td class="num">{{ cafeteria_breakdown | selectattr('sale_type','equalto','visit') | sum(attribute='total_qty') }}</td>
+                    <td class="num" style="color: #6b4e17;">
                         {{ "%.2f"|format(summary.cafeteria_visit) }} ج
                     </td>
                 </tr>
-                <tr style="background:#e9f7fa; font-weight:bold;">
-                    <td colspan="3" style="text-align:left; padding:10px 14px;">الإجمالي الكلي</td>
-                    <td style="padding:10px 8px;">
+                <tr style="background: var(--info-soft); font-weight: bold;">
+                    <td colspan="3" style="text-align:left;">الإجمالي الكلي</td>
+                    <td class="num">
                         {{ cafeteria_breakdown|sum(attribute='total_qty') }}
                     </td>
-                    <td style="padding:10px 8px; color:#0d6efd;">
+                    <td class="num" style="color: var(--blue);">
                         {{ "%.2f"|format(cafeteria_breakdown|sum(attribute='total_revenue')) }} ج
                     </td>
                 </tr>
             </tfoot>
         </table>
+        </div>
     </details>
     {% else %}
-        <div class="section-title" style="border-color:#17a2b8;">🥤 تفاصيل مبيعات الكافيتريا</div>
-        <p style="color:#6c757d; text-align:center; padding:20px; background:white; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+        <div class="section-title" style="border-color: var(--info);">🥤 تفاصيل مبيعات الكافيتريا</div>
+        <div class="panel" style="color: var(--muted); text-align: center;">
             لا توجد مبيعات كافيتريا في هذه الوردية حتى الآن.
-        </p>
+        </div>
     {% endif %}
 
     {# ─── جدول الزيارات المغلقة (محسوبة في الصافي) ─── #}
-    <div class="section-title" style="border-color:#28a745;">✅ الزيارات المغلقة — محسوبة في الصافي ({{ checked_out_visits|length }} زيارة)</div>
+    <div class="section-title" style="border-color: var(--success);">✅ الزيارات المغلقة — محسوبة في الصافي ({{ checked_out_visits|length }} زيارة)</div>
 
     {% if checked_out_visits %}
-    <table class="visits-table">
+    <div class="table-wrap">
+    <table class="ledger">
         <thead>
             <tr>
                 <th>#</th>
@@ -298,132 +208,108 @@
                 <th>وقت الدخول</th>
                 <th>وقت الخروج</th>
                 <th>القاعة</th>
-                <th>المدة (ساعة)</th>
+                <th class="num">المدة (ساعة)</th>
                 <th>طريقة الدفع</th>
-                <th>تكلفة الوقت</th>
-                <th>الخصم</th>
+                <th class="num">تكلفة الوقت</th>
+                <th class="num">الخصم</th>
                 <th>طلبات الكافيتريا</th>
-                <th>إجمالي الكافيتريا</th>
-                <th>إجمالي المدفوع</th>
+                <th class="num">إجمالي الكافيتريا</th>
+                <th class="num">إجمالي المدفوع</th>
             </tr>
         </thead>
         <tbody>
             {% for v in checked_out_visits %}
             <tr>
-                <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
-                <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ v.student_name }}</td>
-                <td style="font-size:12px; color:#0d6efd;">{{ v.check_in_time }}</td>
-                <td style="font-size:12px; color:#dc3545;">{{ v.check_out_time }}</td>
+                <td style="color: var(--muted); font-size:12px;">{{ loop.index }}</td>
+                <td style="font-weight:bold;">{{ v.student_name }}</td>
+                <td style="font-size:12px; color: var(--blue);">{{ v.check_in_time }}</td>
+                <td style="font-size:12px; color: var(--danger);">{{ v.check_out_time }}</td>
                 <td>{{ v.room_name }}</td>
-                <td>{{ v.duration_hours }}</td>
+                <td class="num">{{ v.duration_hours }}</td>
                 <td>
                     {% if v.payment_method == 'cash' %}
-                        <span class="badge-cash">كاش</span>
+                        <span class="badge badge-success">كاش</span>
                     {% elif v.payment_method == 'subscription' %}
-                        <span class="badge-sub">باقة</span>
+                        <span class="badge badge-info">باقة</span>
                     {% else %}
-                        <span class="badge-open">{{ v.payment_method }}</span>
+                        <span class="badge badge-warning">{{ v.payment_method }}</span>
                     {% endif %}
                 </td>
-                <td style="font-weight:bold;">{{ "%.2f"|format(v.total_cost) }} ج</td>
-                <td>{% if v.total_discount and v.total_discount > 0 %}{{ "%.2f"|format(v.total_discount) }} ج{% else %}—{% endif %}</td>
-                <td style="font-size:12px; color:#6c757d; text-align:right; padding-right:8px;">{{ v.sales_summary }}</td>
-                <td>{% if v.sales_total > 0 %}<strong>{{ "%.2f"|format(v.sales_total) }} ج</strong>{% else %}—{% endif %}</td>
-                <td style="font-weight:bold; color:#198754; font-size:14px; background:#e8f5e9;">{{ "%.2f"|format(v.total_paid) }} ج</td>
+                <td class="num">{{ "%.2f"|format(v.total_cost) }} ج</td>
+                <td class="num">{% if v.total_discount and v.total_discount > 0 %}{{ "%.2f"|format(v.total_discount) }} ج{% else %}—{% endif %}</td>
+                <td style="font-size:12px; color: var(--muted);">{{ v.sales_summary }}</td>
+                <td class="num">{% if v.sales_total > 0 %}<strong>{{ "%.2f"|format(v.sales_total) }} ج</strong>{% else %}—{% endif %}</td>
+                <td class="num" style="font-weight:bold; color: var(--success); background: var(--success-soft);">{{ "%.2f"|format(v.total_paid) }} ج</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
-        <p style="color:#6c757d; text-align:center; padding:20px;">لا توجد زيارات مغلقة حتى الآن.</p>
+        <p style="color: var(--muted); text-align: center; padding:20px;">لا توجد زيارات مغلقة حتى الآن.</p>
     {% endif %}
 
     {# ─── جدول الطلاب اللسه جوا (غير محسوبة) ─── #}
     {% if still_inside_visits %}
-    <div style="margin-top:28px; padding:14px 18px; background:#fff3cd; border:1px solid #ffc107; border-radius:10px;">
-        <div class="section-title" style="border-color:#ffc107; margin-top:0;">
-            ⏳ طلاب لسه جوا — <span style="color:#dc3545;">غير محسوبة في الصافي</span> ({{ still_inside_visits|length }} طالب)
+    <div class="panel" style="margin-top:28px; border-right: 4px solid var(--warning); background: var(--warning-soft);">
+        <div class="section-title" style="border-color: var(--warning); margin-top:0;">
+            ⏳ طلاب لسه جوا — <span style="color: var(--danger);">غير محسوبة في الصافي</span> ({{ still_inside_visits|length }} طالب)
         </div>
-        <p style="font-size:13px; color:#856404; margin:0 0 12px;">
+        <p style="font-size:13px; color: var(--warning); margin:0 0 12px;">
             ⚠️ مبيعات وتكاليف الطلاب دول <strong>مش داخلة</strong> في حسابات الوردية الحالية.
             هيتحاسبوا لما يسجلوا خروج (في الوردية القادمة لو لسه قاعدين).
         </p>
-        <table class="visits-table" style="border:2px solid #ffc107;">
+        <div class="table-wrap" style="border-color: var(--warning);">
+        <table class="ledger">
             <thead>
-                <tr style="background:#856404;">
+                <tr>
                     <th>#</th>
                     <th>اسم الطالب</th>
                     <th>وقت الدخول</th>
                     <th>وقت الخروج</th>
                     <th>القاعة</th>
                     <th>طلبات الكافيتريا</th>
-                    <th>إجمالي الكافيتريا (معلّق)</th>
+                    <th class="num">إجمالي الكافيتريا (معلّق)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for v in still_inside_visits %}
-                <tr style="background:#fffbe6;">
-                    <td style="color:#6c757d; font-size:12px;">{{ loop.index }}</td>
-                    <td style="font-weight:bold; text-align:right; padding-right:12px;">{{ v.student_name }}</td>
-                    <td style="font-size:12px; color:#0d6efd;">{{ v.check_in_time }}</td>
-                    <td style="font-size:12px; color:#dc3545;">{{ v.check_out_time }}</td>
+                <tr style="background: #fffbe6;">
+                    <td style="color: var(--muted); font-size:12px;">{{ loop.index }}</td>
+                    <td style="font-weight:bold;">{{ v.student_name }}</td>
+                    <td style="font-size:12px; color: var(--blue);">{{ v.check_in_time }}</td>
+                    <td style="font-size:12px; color: var(--danger);">{{ v.check_out_time }}</td>
                     <td>{{ v.room_name }}</td>
-                    <td style="font-size:12px; color:#6c757d; text-align:right; padding-right:8px;">{{ v.sales_summary }}</td>
-                    <td style="color:#856404;">
+                    <td style="font-size:12px; color: var(--muted);">{{ v.sales_summary }}</td>
+                    <td class="num" style="color: var(--warning);">
                         {% if v.sales_total > 0 %}{{ "%.2f"|format(v.sales_total) }} ج{% else %}—{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </div>
     {% endif %}
 
 
     {# ─── Action Buttons ─── #}
-    <div style="
-        margin-top: 36px;
-        padding: 24px 20px;
-        background: #f8f9fa;
-        border-radius: 12px;
-        border: 1px solid #e9ecef;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 16px;
-    ">
+    <div class="panel no-print" style="margin-top: 36px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
         {# الصف الأول: زرار الطباعة #}
-        <button onclick="window.print()" style="
-            width: 100%;
-            max-width: 480px;
-            padding: 15px;
-            background: #0d6efd;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 17px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            box-shadow: 0 4px 12px rgba(13,110,253,0.3);
-            transition: opacity .2s, transform .1s;
-        " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <button onclick="window.print()" class="btn btn-primary btn-lg btn-block" style="max-width: 480px;">
             🖨️ طباعة التقرير / حفظ PDF
         </button>
 
         {# فاصل #}
-        <div style="width:100%; max-width:480px; border-top: 1px dashed #dee2e6;"></div>
+        <div style="width:100%; max-width:480px; border-top: 1px dashed var(--line);"></div>
 
         {# تحذير قبل الإنهاء #}
         <p style="
             font-size: 13px;
-            color: #856404;
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 8px;
+            color: var(--warning);
+            background: var(--warning-soft);
+            border: 1px solid var(--warning);
+            border-radius: var(--radius-sm);
             padding: 10px 18px;
             width: 100%;
             max-width: 480px;
@@ -435,40 +321,14 @@
 
         {# زراران في صف: رجوع + تأكيد إنهاء #}
         <div style="display:flex; gap:12px; width:100%; max-width:480px;">
-            <a href="{{ url_for('dashboard') }}" style="
-                flex: 1;
-                padding: 14px;
-                background: #6c757d;
-                color: white;
-                border-radius: 10px;
-                text-decoration: none;
-                text-align: center;
-                font-size: 15px;
-                font-weight: bold;
-                transition: opacity .2s;
-            " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost" style="flex: 1;">
                 ← رجوع
             </a>
 
             <form action="{{ url_for('end_shift') }}" method="POST" style="flex:2;"
                   onsubmit="return confirm('⚠️ هل أنت متأكد من إنهاء الوردية نهائياً؟');">
-                <button type="submit" style="
-                    width: 100%;
-                    padding: 14px;
-                    background: #dc3545;
-                    color: white;
-                    border: none;
-                    border-radius: 10px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                    box-shadow: 0 4px 12px rgba(220,53,69,0.3);
-                    transition: opacity .2s;
-                " onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-block">
                     🛑 تأكيد إنهاء الوردية
                 </button>
             </form>

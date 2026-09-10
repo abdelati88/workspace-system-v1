@@ -2,55 +2,58 @@
 {% block title %}بيع باقة اشتراك{% endblock %}
 
 {% block content %}
-    <h1>بيع باقة اشتراك جديدة</h1>
-    <hr>
+    <h1 class="page-title">بيع باقة اشتراك جديدة</h1>
 
     <!-- 1. البحث عن طالب -->
-    <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+    <div class="panel">
         <h3>1. اختر الطالب</h3>
-        <form method="POST">
-            <input type="text" name="search_query" placeholder="ابحث بالاسم أو الرقم" style="padding: 10px; width: 70%;">
-            <button type="submit" style="padding: 10px 20px; background: #007bff; color: white; border: none;">بحث</button>
+        <form method="POST" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="search_query" placeholder="ابحث بالاسم أو الرقم" style="flex:1; min-width:220px;">
+            <button type="submit" class="btn btn-primary">بحث</button>
         </form>
 
         {% if students %}
-            <table style="width: 100%; margin-top: 10px; border-collapse: collapse;">
-                {% for s in students %}
-                <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #ddd;">{{ s.name }} - {{ s.phone }}</td>
-                    <td style="text-align: left;">
-                        <button onclick="selectStudent({{ s.student_id }}, '{{ s.name }}')" style="padding: 5px 10px; background: #28a745; color: white; border: none;">اختيار</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
+            <div class="table-wrap" style="margin-top:14px;">
+                <table class="ledger">
+                    <tbody>
+                        {% for s in students %}
+                        <tr>
+                            <td>{{ s.name }} - {{ s.phone }}</td>
+                            <td style="text-align:left;">
+                                <button onclick="selectStudent({{ s.student_id }}, '{{ s.name }}')" class="btn btn-success btn-sm">اختيار</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% endif %}
     </div>
 
     <!-- 2. اختيار الباقة -->
-    <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+    <div class="panel">
         <h3>2. اختر الباقة</h3>
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirm_sub" value="1">
             <input type="hidden" id="selected_student_id" name="student_id" required>
             <input type="hidden" name="visit_id_redirect" value="{{ visit_id or '' }}">
-            
-            <h4 id="student_display" style="color: #007bff;">لم يتم اختيار طالب</h4>
 
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <h4 id="student_display" style="color: var(--blue); margin-bottom:14px;">لم يتم اختيار طالب</h4>
+
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                 {% for type in types %}
-                <label style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; cursor: pointer; background: white; flex: 1;">
-                    <input type="radio" name="type_id" value="{{ type.type_id }}" required>
+                <label style="border: 1px solid var(--line); padding: 15px; border-radius: var(--radius); cursor: pointer; background: var(--surface); flex: 1; min-width:180px;">
+                    <input type="radio" name="type_id" value="{{ type.type_id }}" required style="width:auto;">
                     <strong>{{ type.name }}</strong><br>
                     {{ type.total_hours }} ساعة / {{ type.days_valid }} يوم<br>
-                    <span style="color: green; font-size: 1.2em;">{{ type.price }} ج.م</span>
+                    <span style="color: var(--success); font-size: 1.2em; font-weight:700;">{{ type.price }} ج.م</span>
                 </label>
                 {% endfor %}
             </div>
 
-            <button type="submit" style="margin-top: 20px; padding: 15px; width: 100%; background: #28a745; color: white; border: none; font-size: 1.2em;">
-                إتمام البيع وتفعيل الباقة
-            </button>
+            <button type="submit" class="btn btn-success btn-lg btn-block" style="margin-top:20px;">إتمام البيع وتفعيل الباقة</button>
         </form>
     </div>
 

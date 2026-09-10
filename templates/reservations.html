@@ -2,27 +2,27 @@
 {% block title %}إدارة حجز القاعات{% endblock %}
 
 {% block content %}
-    <h1>📅 جدول حجز القاعات (Meetings & Courses)</h1>
-    <hr>
+    <h1 class="page-title">📅 جدول حجز القاعات (Meetings &amp; Courses)</h1>
 
-    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 30px;">
+    <div class="panel">
         <h3>➕ إضافة حجز جديد</h3>
         <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                
-                <div style="flex: 1; min-width: 200px;">
+
+                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom:0;">
                     <label>اسم العميل / الجهة:</label>
-                    <input type="text" name="client_name" required style="width: 100%; padding: 8px;">
-                </div>
-                
-                <div style="flex: 1; min-width: 150px;">
-                    <label>رقم التليفون:</label>
-                    <input type="text" name="phone" required style="width: 100%; padding: 8px;">
+                    <input type="text" name="client_name" required>
                 </div>
 
-                <div style="flex: 1; min-width: 200px;">
+                <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom:0;">
+                    <label>رقم التليفون:</label>
+                    <input type="text" name="phone" required>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom:0;">
                     <label>القاعة:</label>
-                    <select name="room_id" required style="width: 100%; padding: 8px;">
+                    <select name="room_id" required>
                         {% for room in rooms %}
                             <option value="{{ room.room_id }}">{{ room.name }}</option>
                         {% endfor %}
@@ -31,64 +31,61 @@
             </div>
 
             <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                <div style="flex: 1;">
+                <div class="form-group" style="flex: 1; margin-bottom:0;">
                     <label>من (التاريخ والوقت):</label>
-                    <input type="datetime-local" name="start_time" required style="width: 100%; padding: 8px;" min="{{ today_min }}">
+                    <input type="datetime-local" name="start_time" required min="{{ today_min }}">
                 </div>
-                <div style="flex: 1;">
+                <div class="form-group" style="flex: 1; margin-bottom:0;">
                     <label>إلى (التاريخ والوقت):</label>
-                    <input type="datetime-local" name="end_time" required style="width: 100%; padding: 8px;">
+                    <input type="datetime-local" name="end_time" required>
                 </div>
             </div>
 
             {# ─── قسم الحجز الثابت المتكرر ─── #}
-            <div style="margin-top: 15px; padding: 12px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
-                <label style="font-weight: bold; cursor: pointer; font-size: 15px;">
+            <div class="panel" style="background: var(--warning-soft); border-color: rgba(179,106,30,0.3); margin: 15px 0 0;">
+                <label style="font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom:0;">
                     <input type="checkbox" id="is_recurring" name="is_recurring" value="1"
-                           style="width: 17px; height: 17px; cursor: pointer; vertical-align: middle; margin-left: 6px;"
+                           style="width: auto; cursor: pointer; vertical-align: middle; margin-left: 6px;"
                            onchange="toggleRecurring(this)">
                     🔁 حجز ثابت (متكرر أسبوعياً)
                 </label>
-                <small style="display: block; color: #856404; margin-top: 4px; margin-right: 25px;">
+                <small style="display: block; color: var(--warning); margin-top: 4px; margin-right: 25px;">
                     للكورسات والعملاء الدائمين — سيتم إنشاء حجز تلقائي لكل أسبوع.
                 </small>
 
                 {# القسم المخفي — يظهر فقط عند تفعيل الـ checkbox #}
-                <div id="recurring-section" style="display: none; margin-top: 15px; padding: 12px; background: #fffbe6; border-radius: 6px; border: 1px dashed #ffc107;">
-                    
+                <div id="recurring-section" style="display: none; margin-top: 15px;">
+
                     <label style="font-weight: bold; display: block; margin-bottom: 8px;">📅 أيام الحجز الأسبوعي:</label>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="5"> السبت</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="6"> الأحد</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="0"> الاثنين</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="1"> الثلاثاء</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="2"> الأربعاء</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="3"> الخميس</label>
-                        <label style="cursor:pointer;"><input type="checkbox" name="recurring_days" value="4"> الجمعة</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="5" style="width:auto;"> السبت</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="6" style="width:auto;"> الأحد</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="0" style="width:auto;"> الاثنين</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="1" style="width:auto;"> الثلاثاء</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="2" style="width:auto;"> الأربعاء</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="3" style="width:auto;"> الخميس</label>
+                        <label style="cursor:pointer; font-weight:normal;"><input type="checkbox" name="recurring_days" value="4" style="width:auto;"> الجمعة</label>
                     </div>
 
                     <label style="font-weight: bold; display: block; margin-bottom: 5px;">📆 تاريخ انتهاء الحجز الثابت:</label>
-                    <input type="date" name="recurring_end_date" id="recurring_end_date"
-                           style="padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; width: 100%; max-width: 280px;">
-                    <small style="color: #856404; display:block; margin-top:4px;">مثال: لو الكورس شهرين، ضع تاريخ آخر يوم من الشهر الثاني.</small>
+                    <input type="date" name="recurring_end_date" id="recurring_end_date" style="max-width: 280px;">
+                    <small style="color: var(--warning); display:block; margin-top:4px;">مثال: لو الكورس شهرين، ضع تاريخ آخر يوم من الشهر الثاني.</small>
                 </div>
             </div>
 
-            <div style="margin-top: 15px; padding: 10px; background-color: #e9ecef; border-radius: 5px;">
-                <label style="font-weight: bold;">🏷️ عرض خاص / خصم (اختياري):</label>
-                <div style="display: flex; gap: 10px; margin-top: 5px;">
-                    <select name="discount_type" style="padding: 5px;">
+            <div class="form-group" style="margin-top: 15px; margin-bottom:0;">
+                <label>🏷️ عرض خاص / خصم (اختياري):</label>
+                <div style="display: flex; gap: 10px;">
+                    <select name="discount_type">
                         <option value="none">-- لا يوجد خصم --</option>
                         <option value="fixed">خصم مبلغ ثابت (ج.م)</option>
                         <option value="percentage">خصم نسبة (%)</option>
                     </select>
-                    <input type="number" name="discount_value" placeholder="القيمة" step="0.1" style="width: 100px; padding: 5px;">
+                    <input type="number" name="discount_value" placeholder="القيمة" step="0.1" style="width: 120px;">
                 </div>
             </div>
 
-            <button type="submit" style="margin-top: 20px; padding: 10px 25px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                تأكيد الحجز
-            </button>
+            <button type="submit" class="btn btn-success" style="margin-top: 20px;">تأكيد الحجز</button>
         </form>
 
         <script>
@@ -108,65 +105,67 @@
     </div>
 
     <h3>الحجوزات القادمة والحالية</h3>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #343a40; color: white;">
-                <th style="padding: 10px;">القاعة</th>
-                <th style="padding: 10px;">العميل</th>
-                <th style="padding: 10px;">الميعاد</th>
-                <th style="padding: 10px;">العرض المتفق عليه</th>
-                <th style="padding: 10px;">الحالة</th>
-                <th style="padding: 10px; text-align: center;">إجراء</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if reservations %}
-                {% for res in reservations %}
-                <tr style="border-bottom: 1px solid #ddd; background-color: {% if res.status == 'active' %}#d4edda{% endif %};">
-                    <td style="padding: 10px; font-weight: bold;">{{ res.room_name }}</td>
-                    <td style="padding: 10px;">{{ res.client_name }}<br><small>{{ res.phone }}</small></td>
-                    <td style="padding: 10px;">
-                        <span style="color: #007bff;">{{ res.start_time }}</span><br>
-                        <span style="color: #dc3545;">{{ res.end_time }}</span>
-                    </td>
-                    <td style="padding: 10px;">
-                        {% if res.discount_type == 'fixed' %}
-                            خصم {{ res.discount_value }} ج
-                        {% elif res.discount_type == 'percentage' %}
-                            خصم {{ res.discount_value }}%
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td style="padding: 10px; font-weight: bold;">
-                        {% if res.status == 'confirmed' %} <span style="color: blue;">مؤكد (انتظار)</span>
-                        {% elif res.status == 'active' %} <span style="color: green;">جاري (موجود الآن)</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 10px; text-align: center;">
-                        
-                        {% if res.status == 'confirmed' %}
-                            <form action="{{ url_for('start_reservation_visit', res_id=res.reservation_id) }}" method="POST" style="display:inline;">
-                                <button type="submit" 
-                                        style="background-color: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                                    ✅ بدء الزيارة (Check-in)
-                                </button>
-                            </form>
-                            
-                            <a href="{{ url_for('cancel_reservation', res_id=res.reservation_id) }}" 
-                               onclick="return confirm('إلغاء الحجز؟')"
-                               style="color: red; text-decoration: none; margin-right: 10px;">❌ إلغاء</a>
-                        {% else %}
-                            <span style="color: #555;">الزيارة جارية...</span>
-                        {% endif %}
-
-                    </td>
+    <div class="table-wrap">
+        <table class="ledger">
+            <thead>
+                <tr>
+                    <th>القاعة</th>
+                    <th>العميل</th>
+                    <th>الميعاد</th>
+                    <th>العرض المتفق عليه</th>
+                    <th>الحالة</th>
+                    <th style="text-align: center;">إجراء</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="6" style="text-align: center; padding: 20px;">لا توجد حجوزات.</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if reservations %}
+                    {% for res in reservations %}
+                    <tr style="{% if res.status == 'active' %}background-color: var(--success-soft);{% endif %}">
+                        <td style="font-weight: bold;">{{ res.room_name }}</td>
+                        <td>{{ res.client_name }}<br><small style="color: var(--muted);">{{ res.phone }}</small></td>
+                        <td>
+                            <span style="color: var(--blue);">{{ res.start_time }}</span><br>
+                            <span style="color: var(--danger);">{{ res.end_time }}</span>
+                        </td>
+                        <td>
+                            {% if res.discount_type == 'fixed' %}
+                                <span class="badge badge-gold">خصم {{ res.discount_value }} ج</span>
+                            {% elif res.discount_type == 'percentage' %}
+                                <span class="badge badge-gold">خصم {{ res.discount_value }}%</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if res.status == 'confirmed' %} <span class="badge badge-info">مؤكد (انتظار)</span>
+                            {% elif res.status == 'active' %} <span class="badge badge-success">جاري (موجود الآن)</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+
+                            {% if res.status == 'confirmed' %}
+                                <form action="{{ url_for('start_reservation_visit', res_id=res.reservation_id) }}" method="POST" style="display:inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-success btn-sm">
+                                        ✅ بدء الزيارة (Check-in)
+                                    </button>
+                                </form>
+
+                                <a href="{{ url_for('cancel_reservation', res_id=res.reservation_id) }}"
+                                   onclick="return confirm('إلغاء الحجز؟')"
+                                   class="btn btn-outline-danger btn-sm" style="margin-right: 8px;">❌ إلغاء</a>
+                            {% else %}
+                                <span style="color: var(--muted);">الزيارة جارية...</span>
+                            {% endif %}
+
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="6" style="text-align: center; color: var(--muted);">لا توجد حجوزات.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 
 {% endblock %}

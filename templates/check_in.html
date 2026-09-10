@@ -2,89 +2,34 @@
 {% block title %}تسجيل دخول طالب{% endblock %}
 
 {% block content %}
-<style>
-    .checkin-container {
-        max-width: 600px;
-        margin: 50px auto;
-        padding: 30px;
-        background: #ffffff;
-        border-radius: 15px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        direction: rtl; /* لضبط الاتجاه العربي */
-        text-align: right;
-    }
-    .form-header {
-        background-color: #28a745;
-        color: white;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 25px;
-        text-align: center;
-    }
-    .custom-input {
-        width: 100%;
-        padding: 12px;
-        margin: 10px 0 20px 0;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        font-size: 16px;
-    }
-    .time-box {
-        background-color: #fff3cd;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #ffeeba;
-        margin-bottom: 20px;
-    }
-    .btn-submit {
-        width: 100%;
-        padding: 15px;
-        background-color: #28a745;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 18px;
-        cursor: pointer;
-        transition: 0.3s;
-    }
-    .btn-submit:hover { background-color: #218838; }
-    .btn-back {
-        display: block;
-        text-align: center;
-        margin-top: 15px;
-        color: #6c757d;
-        text-decoration: none;
-    }
-</style>
+<h1 class="page-title">تسجيل دخول طالب</h1>
 
-<div class="checkin-container">
-    <div class="form-header">
-        <h3 class="mb-0">تسجيل دخول طالب (Check-in)</h3>
-    </div>
-
+<div class="panel" style="max-width: 560px; margin: 0 auto;">
     <form action="{{ url_for('check_in') }}" method="POST">
-        
-        <label class="fw-bold">ابحث بالاسم أو رقم التليفون:</label>
-        <input type="text" name="search_query" required class="custom-input" placeholder="اكتب اسم الطالب هنا...">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <div class="time-box">
-            <label class="fw-bold" style="color: #856404;">تاريخ الدخول اليدوي (اختياري):</label>
-            <input type="date" name="manual_date" class="custom-input" style="margin-bottom: 5px;">
-            
-            <label class="fw-bold" style="color: #856404;">وقت الدخول (اختياري):</label>
-            <input type="time" name="manual_time" class="custom-input" style="margin-bottom: 5px;">
-            <p style="font-size: 13px; color: #856404; margin-top: 5px;">
-                ⚠️ لو الجهاز كان فاصل، حدد وقت دخول الطالب الفعلي. سيبه فاضي للوقت الحالي.
+        <div class="form-group">
+            <label for="search_query">ابحث بالاسم أو رقم التليفون</label>
+            <input type="text" id="search_query" name="search_query" required placeholder="اكتب اسم الطالب هنا..." autofocus>
+        </div>
+
+        <div class="panel" style="background: var(--warning-soft); border-color: rgba(179,106,30,0.3); margin-bottom:18px;">
+            <div class="form-group">
+                <label for="manual_date" style="color: var(--warning);">تاريخ الدخول اليدوي (اختياري)</label>
+                <input type="date" id="manual_date" name="manual_date">
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label for="manual_time" style="color: var(--warning);">وقت الدخول (اختياري)</label>
+                <input type="time" id="manual_time" name="manual_time">
+            </div>
+            <p style="font-size: 0.82em; color: var(--warning); margin:0;">
+                لو الجهاز كان مقفول، حدد وقت دخول الطالب الفعلي. سيبها فاضية للوقت الحالي.
             </p>
         </div>
 
-        <button type="submit" class="btn-submit">
-            تسجيل دخول (Check-in)
-        </button>
+        <button type="submit" class="btn btn-success btn-lg btn-block">تسجيل دخول</button>
 
-        <a href="javascript:history.back()" class="btn-back">
-            &larr; رجوع للصفحة السابقة
-        </a>
+        <a href="javascript:history.back()" class="btn-back" style="display:block; text-align:center;">رجوع للصفحة السابقة</a>
     </form>
 </div>
 {% endblock %}

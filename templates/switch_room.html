@@ -2,56 +2,35 @@
 {% block title %}نقل الطالب{% endblock %}
 
 {% block content %}
-<div class="container" dir="rtl" style="margin-top: 50px; margin-bottom: 50px;">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6"> <div class="card shadow" style="border: none; border-radius: 12px; overflow: hidden;">
-                <div class="card-header text-center" style="background-color: #ffc107; color: #333; padding: 15px;">
-                    <h4 class="m-0 font-weight-bold">🔄 نقل الطالب لمكان آخر</h4>
-                </div>
+    <h1 class="page-title">🔄 نقل الطالب لمكان آخر</h1>
 
-                <div class="card-body p-4" style="text-align: right;">
-                    <div class="text-center mb-4">
-                        <h3 class="font-weight-bold" style="color: #007bff;">{{ student_name }}</h3>
-                        <div class="mt-2">
-                            <span class="badge badge-secondary p-2" style="font-size: 14px;">
-                                المكان الحالي: {{ current_room }}
-                            </span>
-                        </div>
-                    </div>
+    <div class="panel" style="max-width: 520px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 18px;">
+            <h3 style="color: var(--blue); margin-bottom: 8px;">{{ student_name }}</h3>
+            <span class="badge badge-info">المكان الحالي: {{ current_room }}</span>
+        </div>
 
-                    <hr>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                    <form method="POST">
-                        <div class="form-group">
-                            <label class="font-weight-bold mb-2" style="font-size: 16px;">📍 اختر المكان الجديد:</label>
-                            <select name="new_room" class="form-control" style="height: 50px; font-size: 16px;">
-                                {% for room in all_rooms %}
-                                    <option value="{{ room['name'] }}" {% if room['name'] == current_room %}selected{% endif %}>
-                                        {{ room['name'] }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="alert alert-warning mt-3" style="font-size: 13px;">
-                            <i class="fas fa-exclamation-circle"></i> 
-                            تنبيه: سيتم نقل الطالب وتحديث الغرفة في الفاتورة الحالية.
-                        </div>
-
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-warning btn-block font-weight-bold py-2" style="font-size: 18px; width: 100%;">
-                                تأكيد النقل ✅
-                            </button>
-                            
-                            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-block mt-2 border" style="width: 100%;">
-                                إلغاء وعودة ❌
-                            </a>
-                        </div>
-                    </form>
-                </div>
+            <div class="form-group">
+                <label>📍 اختر المكان الجديد:</label>
+                <select name="new_room">
+                    {% for room in all_rooms %}
+                        <option value="{{ room['name'] }}" {% if room['name'] == current_room %}selected{% endif %}>
+                            {{ room['name'] }}
+                        </option>
+                    {% endfor %}
+                </select>
             </div>
 
-        </div>
+            <p style="background: var(--warning-soft); color: var(--warning); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.85em; margin: 14px 0;">
+                تنبيه: سيتم نقل الطالب وتحديث الغرفة في الفاتورة الحالية.
+            </p>
+
+            <button type="submit" class="btn btn-accent btn-lg btn-block">تأكيد النقل ✅</button>
+
+            <a href="{{ url_for('dashboard') }}" class="btn-back" style="display: block; text-align: center; margin-top: 10px;">إلغاء وعودة ❌</a>
+        </form>
     </div>
-</div>
 {% endblock %}

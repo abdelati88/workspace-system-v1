@@ -2,81 +2,90 @@
 {% block title %}المكتبة والاستعارة{% endblock %}
 
 {% block content %}
-    <h1>📚 مكتبة المكان (استعارة وكتب)</h1>
-    <hr>
+    <h1 class="page-title">📚 مكتبة المكان (استعارة وكتب)</h1>
 
     {% if session.get('role') == 'manager' %}
-    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd;">
+    <div class="panel" style="border-right: 4px solid var(--gold);">
         <h3>➕ إضافة كتاب جديد للمكتبة</h3>
-        <form action="{{ url_for('add_book') }}" method="POST" style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <input type="text" name="title" placeholder="اسم الكتاب / الرواية" required style="padding: 8px; flex: 2;">
-            <input type="text" name="author" placeholder="المؤلف" style="padding: 8px; flex: 1;">
-            <input type="number" name="price" placeholder="السعر الأصلي (التأمين)" required step="0.1" style="padding: 8px; width: 150px;">
-            <button type="submit" style="padding: 8px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">إضافة</button>
+        <form action="{{ url_for('add_book') }}" method="POST" style="display: flex; gap: 10px; flex-wrap: wrap; align-items:flex-end;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group" style="flex: 2; min-width:200px; margin-bottom:0;">
+                <input type="text" name="title" placeholder="اسم الكتاب / الرواية" required>
+            </div>
+            <div class="form-group" style="flex: 1; min-width:140px; margin-bottom:0;">
+                <input type="text" name="author" placeholder="المؤلف">
+            </div>
+            <div class="form-group" style="width: 170px; margin-bottom:0;">
+                <input type="number" name="price" placeholder="السعر الأصلي (التأمين)" required step="0.1">
+            </div>
+            <button type="submit" class="btn btn-success">إضافة</button>
         </form>
     </div>
     {% endif %}
 
-    <div style="display: flex; gap: 20px;">
-        
-        <div style="flex: 2;">
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+
+        <div style="flex: 2; min-width: 320px;">
             <h3>📖 الكتب الموجودة</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="background-color: #343a40; color: white;">
-                        <th style="padding: 8px;">الكتاب</th>
-                        <th style="padding: 8px;">التأمين</th>
-                        <th style="padding: 8px;">الإيجار/يوم</th>
-                        <th style="padding: 8px;">الحالة</th>
-                        <th style="padding: 8px;">إجراء</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for book in books %}
-                    <tr style="border-bottom: 1px solid #ddd;">
-                        <td style="padding: 8px;">
-                            <strong>{{ book.title }}</strong><br>
-                            <small style="color: #666;">{{ book.author }}</small>
-                        </td>
-                        <td style="padding: 8px;">{{ book.price }} ج</td>
-                        <td style="padding: 8px;">{{ book.rental_fee_per_day }} ج</td>
-                        <td style="padding: 8px;">
-                            {% if book.is_available %}
-                                <span style="color: green; font-weight: bold;">متاح</span>
-                            {% else %}
-                                <span style="color: red; font-weight: bold;">مستعار</span>
-                            {% endif %}
-                        </td>
-                        <td style="padding: 8px;">
-                            {% if book.is_available %}
-                                <button onclick="openBorrowModal('{{ book.book_id }}', '{{ book.title }}', '{{ book.price }}')" 
-                                        style="background-color: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-                                    استعارة
-                                </button>
-                            {% else %}
-                                <span style="color: #aaa;">-</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrap">
+                <table class="ledger">
+                    <thead>
+                        <tr>
+                            <th>الكتاب</th>
+                            <th class="num">التأمين</th>
+                            <th class="num">الإيجار/يوم</th>
+                            <th>الحالة</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in books %}
+                        <tr>
+                            <td>
+                                <strong>{{ book.title }}</strong><br>
+                                <small style="color: var(--muted);">{{ book.author }}</small>
+                            </td>
+                            <td class="num">{{ book.price }} ج</td>
+                            <td class="num">{{ book.rental_fee_per_day }} ج</td>
+                            <td>
+                                {% if book.is_available %}
+                                    <span class="badge badge-success">متاح</span>
+                                {% else %}
+                                    <span class="badge badge-danger">مستعار</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if book.is_available %}
+                                    <button onclick="openBorrowModal('{{ book.book_id }}', '{{ book.title }}', '{{ book.price }}')"
+                                            class="btn btn-primary btn-sm">
+                                        استعارة
+                                    </button>
+                                {% else %}
+                                    <span style="color: var(--muted);">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div style="flex: 1; background-color: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba;">
+        <div class="panel" style="flex: 1; min-width: 260px; border-right: 4px solid var(--warning); margin-bottom: 0;">
             <h3>⏳ كتب مستعارة حالياً</h3>
             {% if active_borrowings %}
-                <ul style="list-style: none; padding: 0;">
+                <ul style="list-style: none; padding: 0; margin: 0;">
                     {% for borrow in active_borrowings %}
-                    <li style="background: white; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <li class="panel" style="margin-bottom: 10px;">
                         <strong>{{ borrow.title }}</strong> <br>
-                        مع الطالب: <span style="color: #007bff;">{{ borrow.student_name }}</span> <br>
-                        <small>تاريخ: {{ borrow.borrow_date }}</small> <br>
+                        مع الطالب: <span style="color: var(--blue);">{{ borrow.student_name }}</span> <br>
+                        <small style="color: var(--muted);">تاريخ: {{ borrow.borrow_date }}</small> <br>
                         <strong>التأمين: {{ borrow.deposit_paid }} ج</strong>
-                        
+
                         <form action="{{ url_for('return_book', borrow_id=borrow.borrow_id) }}" method="POST" style="margin-top: 10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" onclick="return confirm('تأكيد استرجاع الكتاب وحساب التكلفة؟')"
-                                    style="width: 100%; padding: 8px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    class="btn btn-danger btn-block">
                                 ↩️ إرجاع الكتاب
                             </button>
                         </form>
@@ -89,18 +98,23 @@
         </div>
     </div>
 
-    <div id="borrowModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
-        <div style="background: white; width: 400px; margin: 100px auto; padding: 20px; border-radius: 8px; text-align: center;">
+    <div id="borrowModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(22,35,61,0.55); z-index: 50;">
+        <div class="panel" style="width: 400px; max-width: 90%; margin: 100px auto; text-align: center;">
             <h3>تسجيل استعارة</h3>
-            <h4 id="modalBookTitle" style="color: #007bff;"></h4>
-            <p>مطلوب دفع تأمين: <strong id="modalBookPrice" style="color: #dc3545; font-size: 1.2em;"></strong> جنيه</p>
-            
+            <h4 id="modalBookTitle" style="color: var(--blue);"></h4>
+            <p>مطلوب دفع تأمين: <strong id="modalBookPrice" style="color: var(--danger); font-size: 1.2em;"></strong> جنيه</p>
+
             <form action="{{ url_for('borrow_book') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="book_id" id="modalBookId">
-                <input type="text" name="student_phone" placeholder="رقم تليفون الطالب" required style="width: 100%; padding: 10px; margin-bottom: 15px; font-size: 16px;">
-                
-                <button type="submit" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">تأكيد ودفع التأمين</button>
-                <button type="button" onclick="document.getElementById('borrowModal').style.display='none'" style="padding: 10px 20px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">إلغاء</button>
+                <div class="form-group">
+                    <input type="text" name="student_phone" placeholder="رقم تليفون الطالب" required>
+                </div>
+
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button type="submit" class="btn btn-success">تأكيد ودفع التأمين</button>
+                    <button type="button" onclick="document.getElementById('borrowModal').style.display='none'" class="btn btn-ghost">إلغاء</button>
+                </div>
             </form>
         </div>
     </div>

@@ -2,72 +2,70 @@
 {% block title %}تسجيل مصروف / شراء بضاعة{% endblock %}
 
 {% block content %}
-    <h1>تسجيل مصروف / شراء بضاعة</h1>
-    <hr>
+    <h1 class="page-title">تسجيل مصروف / شراء بضاعة</h1>
 
-    <form action="{{ url_for('log_expense') }}" method="POST">
+    <div class="panel">
+        <form action="{{ url_for('log_expense') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <h3>الخطوة 1: تفاصيل الفاتورة (إجباري)</h3>
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="description" style="font-weight: bold;">الوصف (البيان):</label>
-            <input type="text" id="description" name="description" required 
-                   placeholder="مثال: فاتورة مشتريات من كارفور"
-                   style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
-        </div>
+            <h3>الخطوة 1: تفاصيل الفاتورة (إجباري)</h3>
+            <div class="form-group">
+                <label for="description">الوصف (البيان):</label>
+                <input type="text" id="description" name="description" required
+                       placeholder="مثال: فاتورة مشتريات من كارفور">
+            </div>
 
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="amount" style="font-weight: bold;">إجمالي مبلغ الفاتورة (بالجنيه):</label>
-            <input type="number" id="amount" name="amount" required 
-                   placeholder="مثال: 1200.0"
-                   step="0.1" min="0"
-                   style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
-        </div>
+            <div class="form-group">
+                <label for="amount">إجمالي مبلغ الفاتورة (بالجنيه):</label>
+                <input type="number" id="amount" name="amount" required
+                       placeholder="مثال: 1200.0"
+                       step="0.1" min="0">
+            </div>
 
-        <hr style="margin: 30px 0;">
+            <hr>
 
-        <h3>الخطوة 2: إضافة للمخزن (اختياري)</h3>
-        <p>لو المصروف ده كان لشراء بضاعة، املأ الكميات اللي اشتريتها:</p>
+            <h3>الخطوة 2: إضافة للمخزن (اختياري)</h3>
+            <p style="color: var(--muted); font-size: 0.95em;">لو المصروف ده كان لشراء بضاعة، املأ الكميات اللي اشتريتها:</p>
 
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background-color: #f4f4f4;">
-                    <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">المنتج</th>
-                    <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الكمية الحالية بالمخزن</th>
-                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 150px;">الكمية المضافة (جديد)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- هنلف على كل المنتجات اللي في الداتا بيز -->
-                {% for product in products %}
-                <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd;">
-                        <label for="stock_add_{{ product.product_id }}">{{ product.name }}</label>
-                    </td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">
-                        {{ product.stock_quantity }}
-                    </td>
-                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
-                        <input type="number" 
-                               id="stock_add_{{ product.product_id }}"
-                               name="stock_add_{{ product.product_id }}" 
-                               min="0"
-                               step="0.1" 
-                               value="0" 
-                               style="width: 100px; padding: 5px; text-align: center;">
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <div class="table-wrap">
+                <table class="ledger">
+                    <thead>
+                        <tr>
+                            <th>المنتج</th>
+                            <th class="num">الكمية الحالية بالمخزن</th>
+                            <th style="text-align: center; width: 150px;">الكمية المضافة (جديد)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- هنلف على كل المنتجات اللي في الداتا بيز -->
+                        {% for product in products %}
+                        <tr>
+                            <td>
+                                <label for="stock_add_{{ product.product_id }}">{{ product.name }}</label>
+                            </td>
+                            <td class="num">{{ product.stock_quantity }}</td>
+                            <td style="text-align: center;">
+                                <input type="number"
+                                       id="stock_add_{{ product.product_id }}"
+                                       name="stock_add_{{ product.product_id }}"
+                                       min="0"
+                                       step="0.1"
+                                       value="0"
+                                       style="width: 100px; padding: 6px; text-align: center;">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
-        <button type="submit" style="font-size: 18px; padding: 12px 25px; background-color: #ffc107; color: #333; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px;">
-            تسجيل المصروف وتحديث المخزن
-        </button>
+            <div style="display: flex; gap: 16px; align-items: center; margin-top: 20px;">
+                <button type="submit" class="btn btn-accent btn-lg">تسجيل المصروف وتحديث المخزن</button>
+                <a href="{{ url_for('dashboard') }}" class="btn-back">إلغاء</a>
+            </div>
 
-        <a href="{{ url_for('dashboard') }}" style="margin-right: 15px; text-decoration: none; color: #6c757d;">
-            إلغاء
-        </a>
+        </form>
 
-    </form>
+    </div>
 
 {% endblock %}

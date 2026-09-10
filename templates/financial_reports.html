@@ -2,87 +2,86 @@
 {% block title %}التقارير المالية{% endblock %}
 
 {% block content %}
-    <h1>التقارير المالية (حسب اليوم)</h1>
-    <p>اختر التاريخ لعرض ملخص الورديات المغلقة لهذا اليوم.</p>
-    <hr>
+    <h1 class="page-title">التقارير المالية (حسب اليوم)</h1>
+    <p class="page-subtitle">اختر التاريخ لعرض ملخص الورديات المغلقة لهذا اليوم.</p>
 
-    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-        <form method="GET" action="{{ url_for('financial_reports') }}">
-            <label for="report_date" style="font-weight: bold; font-size: 18px;">اختر التاريخ:</label>
-            <input type="date" id="report_date" name="report_date" value="{{ selected_date }}" 
-                   style="padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px;">
-            <button type="submit" 
-                    style="font-size: 16px; padding: 9px 15px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                بحث
-            </button>
+    <div class="panel">
+        <form method="GET" action="{{ url_for('financial_reports') }}" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="report_date">اختر التاريخ:</label>
+                <input type="date" id="report_date" name="report_date" value="{{ selected_date }}">
+            </div>
+            <button type="submit" class="btn btn-primary">بحث</button>
         </form>
     </div>
 
     <h2>ملخص يوم: {{ selected_date }}</h2>
-    
+
     <!-- (الجزء الأول: الملخص الإجمالي لليوم المختار) -->
-    <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; justify-content: space-around;">
-        <div style="text-align: center;">
-            <h3 style="margin: 0;">إجمالي الإيرادات (لليوم)</h3>
-            <h2 style="margin: 5px 0; color: #28a745;">{{ "%.2f"|format(summary.total_revenue) }} جنيه</h2>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:30px;">
+        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center;">
+            <div class="stat-value">{{ "%.2f"|format(summary.total_revenue) }} جنيه</div>
+            <div class="stat-label">إجمالي الإيرادات (لليوم)</div>
         </div>
-        <div style="text-align: center;">
-            <h3 style="margin: 0;">إجمالي المصروفات (لليوم)</h3>
-            <h2 style="margin: 5px 0; color: #dc3545;">{{ "%.2f"|format(summary.total_expenses) }} جنيه</h2>
+        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--danger);">
+            <div class="stat-value">{{ "%.2f"|format(summary.total_expenses) }} جنيه</div>
+            <div class="stat-label">إجمالي المصروفات (لليوم)</div>
         </div>
-        <div style="text-align: center;">
-            <h3 style="margin: 0;">صافي الربح (لليوم)</h3>
-            <h2 style="margin: 5px 0; color: #007bff;">{{ "%.2f"|format(summary.net_profit) }} جنيه</h2>
+        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--blue);">
+            <div class="stat-value">{{ "%.2f"|format(summary.net_profit) }} جنيه</div>
+            <div class="stat-label">صافي الدرج (لليوم)</div>
         </div>
     </div>
-    
+
     <!-- (الجزء الثاني: جدول تفاصيل الورديات لليوم المختار) -->
     <h3>تفاصيل الورديات المغلقة (ليوم {{ selected_date }})</h3>
-    
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #f4f4f4;">
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">رقم الوردية</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الموظف</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">وقت البدء</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">وقت الإنهاء</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #28a745;">إيراد الساعات</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #28a745;">إيراد المبيعات</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #dc3545;">المصروفات</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #007bff;">صافي الدرج</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if shifts %}
-                {% for shift in shifts %}
+
+    <div class="table-wrap">
+        <table class="ledger">
+            <thead>
                 <tr>
-                    <!-- (تعديل) السطر ده بس اللي هيتغير -->
-                    <td style="padding: 10px; border: 1px solid #ddd;">
-                        <a href="{{ url_for('shift_details', shift_id=shift.shift_id) }}" style="font-weight: bold; text-decoration: underline;">
-                            {{ shift.shift_id }}
-                        </a>
-                    </td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ shift.username }}</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ shift.start_time }}</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ shift.end_time }}</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(shift.revenue_hours) }} ج</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(shift.revenue_sales) }} ج</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ "%.2f"|format(shift.total_expenses) }} ج</td>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">{{ "%.2f"|format(shift.net_cash) }} ج</td>
+                    <th>رقم الوردية</th>
+                    <th>الموظف</th>
+                    <th>وقت البدء</th>
+                    <th>وقت الإنهاء</th>
+                    <th class="num">إيراد الساعات</th>
+                    <th class="num">إيراد المبيعات</th>
+                    <th class="num">المصروفات</th>
+                    <th class="num">صافي الدرج</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="8" style="padding: 10px; border: 1px solid #ddd; text-align: center;">
-                        لا يوجد أي ورديات مغلقة لهذا اليوم.
-                    </td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-    
+            </thead>
+            <tbody>
+                {% if shifts %}
+                    {% for shift in shifts %}
+                    <tr>
+                        <!-- (تعديل) السطر ده بس اللي هيتغير -->
+                        <td>
+                            <a href="{{ url_for('shift_details', shift_id=shift.shift_id) }}" style="font-weight: 700;">
+                                {{ shift.shift_id }}
+                            </a>
+                        </td>
+                        <td>{{ shift.username }}</td>
+                        <td>{{ shift.start_time }}</td>
+                        <td>{{ shift.end_time }}</td>
+                        <td class="num">{{ "%.2f"|format(shift.revenue_hours) }} ج</td>
+                        <td class="num">{{ "%.2f"|format(shift.revenue_sales) }} ج</td>
+                        <td class="num">{{ "%.2f"|format(shift.total_expenses) }} ج</td>
+                        <td class="num">{{ "%.2f"|format(shift.net_cash) }} ج</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" style="text-align: center; color: var(--muted);">
+                            لا يوجد أي ورديات مغلقة لهذا اليوم.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
     <a href="javascript:history.back()" class="btn-back">
-    &larr; رجوع (Back)
-</a>
+        رجوع
+    </a>
 
 {% endblock %}

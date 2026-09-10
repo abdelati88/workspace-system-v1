@@ -2,13 +2,13 @@
 {% block title %}تم إنشاء الكوبون{% endblock %}
 
 {% block content %}
-    <div style="text-align: center; padding: 40px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px;">
-        <h1 style="color: #155724;">✅ تم إنشاء الكوبون بنجاح!</h1>
-        <h3 style="margin: 20px 0;">للطالب: <span style="color: #007bff;">{{ student_name }}</span></h3>
+    <div class="panel" style="text-align: center; padding: 40px; border-right: 4px solid var(--success);">
+        <h1 style="color: var(--success);">✅ تم إنشاء الكوبون بنجاح!</h1>
+        <h3 style="margin: 20px 0;">للطالب: <span style="color: var(--blue);">{{ student_name }}</span></h3>
 
-        <div style="background-color: white; padding: 15px; border-radius: 6px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <p style="margin: 0; font-size: 20px;">كود الخصم: <strong style="color: #dc3545;">{{ coupon_code }}</strong></p>
-            <p style="margin: 5px 0 0 0; color: #6c757d;">(خصم {{ coupon_value }} 
+        <div class="panel" style="display: inline-block; margin-bottom: 0;">
+            <p style="margin: 0; font-size: 1.2em;">كود الخصم: <strong style="color: var(--danger);">{{ coupon_code }}</strong></p>
+            <p style="margin: 5px 0 0 0; color: var(--muted);">(خصم {{ coupon_value }}
                 {% if coupon_type == 'percentage' %}
                     %
                 {% else %}
@@ -18,14 +18,14 @@
         </div>
 
         <h3 style="margin-top: 30px;">إرسال الكوبون عبر WhatsApp</h3>
-        <a href="{{ whatsapp_link }}" 
-           target="_blank" 
-           style="display: inline-block; padding: 12px 25px; background-color: #25D366; color: white; text-decoration: none; border-radius: 5px; font-size: 18px; font-weight: bold;">
+        <a href="{{ whatsapp_link }}"
+           target="_blank"
+           class="btn btn-success btn-lg">
             إرسال الكوبون الآن
         </a>
     </div>
 
-    <a href="{{ url_for('analytics_report') }}" class="btn-back" style="margin-top: 30px;">
-        &larr; العودة لصفحة التحليلات
+    <a href="{{ url_for('analytics_report') }}" class="btn-back" style="margin-top: 20px;">
+        العودة لصفحة التحليلات
     </a>
 {% endblock %}

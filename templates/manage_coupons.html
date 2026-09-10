@@ -2,74 +2,65 @@
 {% block title %}إدارة الكوبونات{% endblock %}
 
 {% block content %}
-    <h1>إدارة الكوبونات وأكواد الخصم</h1>
-    <p>هنا يمكنك مراجعة حالة الكوبونات النشطة والمستخدمة في النظام.</p>
-    <hr>
-    
-    <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-        <table style="width: 100%; border-collapse: collapse;">
+    <h1 class="page-title">إدارة الكوبونات وأكواد الخصم</h1>
+    <p class="page-subtitle">هنا يمكنك مراجعة حالة الكوبونات النشطة والمستخدمة في النظام.</p>
+
+    <div class="table-wrap">
+        <table class="ledger">
             <thead>
-                <tr style="background-color: #007bff; color: white;">
-                    <th style="padding: 12px; text-align: right; border: 1px solid #ddd;">كود الخصم</th>
-                    <th style="padding: 12px; text-align: right; border: 1px solid #ddd;">الطالب</th> <!-- (جديد) -->
-                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">قيمة الخصم</th>
-                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">نوع الخصم</th>
-                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">تاريخ الانتهاء</th>
-                    <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">حالة الكوبون</th>
+                <tr>
+                    <th>كود الخصم</th>
+                    <th>الطالب</th> <!-- (جديد) -->
+                    <th class="num">قيمة الخصم</th>
+                    <th>نوع الخصم</th>
+                    <th>تاريخ الانتهاء</th>
+                    <th>حالة الكوبون</th>
                 </tr>
             </thead>
             <tbody>
                 {% if coupons %}
                     {% for coupon in coupons %}
-                    
-                    {% set row_color = '#f8f9fa' %} <!-- افتراضي -->
-                    {% if coupon.is_used %}
-                        {% set row_color = '#f8d7da' %} <!-- أحمر (مستخدم) -->
-                    {% elif coupon.is_expired %}
-                        {% set row_color = '#e9ecef' %} <!-- رمادي (منتهي) -->
-                    {% endif %}
-
-                    <tr style="background-color: {{ row_color }};">
-                        <td style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold; color: #343a40;">
+                    <tr>
+                        <td style="font-weight: 700;">
                             {{ coupon.code }}
                         </td>
                         <!-- (جديد) عمود الطالب -->
-                        <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">
+                        <td>
                             {{ coupon.name or 'N/A' }}
                         </td>
-                        <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">
+                        <td class="num">
                             {{ "%.2f"|format(coupon.discount_value) }}
                         </td>
-                        <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">
+                        <td>
                             {% if coupon.discount_type == 'percentage' %}
                                 نسبة مئوية (%)
                             {% else %}
                                 مبلغ ثابت (ج.م)
                             {% endif %}
                         </td>
-                        <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">
+                        <td>
                             {{ coupon.expiry_date.split(' ')[0] if coupon.expiry_date else 'N/A' }}
                         </td>
-                        <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">
+                        <td>
                             {% if coupon.is_used %}
-                                <span style="color: #721c24; font-weight: bold;">تم استخدامه</span>
+                                <span class="badge badge-danger">تم استخدامه</span>
                             {% elif coupon.is_expired %}
-                                <span style="color: #6c757d; font-weight: bold;">منتهي الصلاحية</span>
+                                <span class="badge badge-info">منتهي الصلاحية</span>
                             {% else %}
-                                <span style="color: #155724; font-weight: bold;">نشط (Active)</span>
+                                <span class="badge badge-success">نشط (Active)</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="6" style="padding: 10px; text-align: center;">لا توجد كوبونات.</td></tr>
+                    <tr><td colspan="6" style="text-align: center; color: var(--muted);">لا توجد كوبونات.</td></tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 
     <a href="javascript:history.back()" class="btn-back" style="margin-top: 20px;">
-        &larr; رجوع (Back)
+        رجوع
     </a>
 
 {% endblock %}

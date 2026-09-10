@@ -2,36 +2,28 @@
 {% block title %}تعديل سعر الأوضة{% endblock %}
 
 {% block content %}
-    <h1>تعديل سعر: {{ room.name }}</h1>
-    <hr>
-    
-    <form action="{{ url_for('edit_room', room_id=room.room_id) }}" method="POST">
-        
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="name" style="font-weight: bold;">اسم الأوضة:</label>
-            <!-- (الاسم للقراءة فقط) -->
-            <input type="text" id="name" name="name" required 
-                   value="{{ room.name }}"
-                   style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px; background-color: #e9ecef;"
-                   readonly>
-        </div>
-        
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="hourly_rate" style="font-weight: bold;">سعر الساعة الجديد (جنيه):</label>
-            <input type="number" id="hourly_rate" name="hourly_rate" required 
-                   value="{{ room.hourly_rate }}"
-                   step="0.1" min="0"
-                   style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 5px;">
-        </div>
-        
-        <button type="submit" style="font-size: 18px; padding: 12px 25px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            حفظ السعر الجديد
-        </button>
-        
-        <a href="javascript:history.back()" class="btn-back">
-            &larr; إلغاء (رجوع)
-        </a>
-        
-    </form>
-    
+    <h1 class="page-title">تعديل سعر: {{ room.name }}</h1>
+
+    <div class="panel" style="max-width: 480px;">
+        <form action="{{ url_for('edit_room', room_id=room.room_id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="name">اسم الأوضة:</label>
+                <!-- (الاسم للقراءة فقط) -->
+                <input type="text" id="name" name="name" required value="{{ room.name }}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="hourly_rate">سعر الساعة الجديد (جنيه):</label>
+                <input type="number" id="hourly_rate" name="hourly_rate" required value="{{ room.hourly_rate }}" step="0.1" min="0">
+            </div>
+
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button type="submit" class="btn btn-success btn-lg">حفظ السعر الجديد</button>
+                <a href="javascript:history.back()" class="btn-back">إلغاء</a>
+            </div>
+        </form>
+    </div>
+
 {% endblock %}

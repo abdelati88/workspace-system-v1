@@ -1,0 +1,108 @@
+{# قسم مشترك: عمليات الاستقبال اليومية - يُستخدم في لوحة المدير ولوحة الموظف #}
+
+<div class="panel" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 style="margin-bottom:2px;">أهلاً، {{ session.get('username') }}</h2>
+        <p style="margin:0; font-size:0.9em;">نتمنى لك وردية موفقة.</p>
+    </div>
+    {% if session.get('active_shift_id') %}
+        <span class="status-pill open"><span class="dot"></span> الوردية رقم {{ session.get('active_shift_id') }} مفتوحة</span>
+    {% else %}
+        <span class="status-pill closed"><span class="dot"></span> الوردية مغلقة</span>
+    {% endif %}
+</div>
+
+{% if session.get('active_shift_id') and notify_alert %}
+    <div class="panel" style="border-right:4px solid var(--warning); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div><strong>{{ notify_alert }}</strong></div>
+        <a href="{{ notify_link }}" target="_blank" class="btn btn-success btn-sm">إبلاغ العميل واتساب</a>
+    </div>
+{% endif %}
+
+{% if not session.get('active_shift_id') %}
+
+    <div class="panel" style="text-align:center; padding:50px 20px;">
+        <h2 style="font-size:1.5em; margin-bottom:10px;">الوردية مغلقة حالياً</h2>
+        <p style="margin-bottom:26px;">لازم تبدأ وردية جديدة عشان تقدر تستقبل الطلاب وتسجل العمليات.</p>
+        <form action="{{ url_for('start_shift') }}" method="POST" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary btn-lg">بدء وردية جديدة</button>
+        </form>
+    </div>
+
+{% else %}
+
+    <div style="display:flex; gap:18px; flex-wrap:wrap;">
+
+        <div style="flex:1; min-width:220px; max-width:260px;">
+            <div class="panel" style="padding:14px;">
+                <h3 style="font-size:0.95em; margin-bottom:12px;">مراقبة القاعات</h3>
+                {% for room in room_stats %}
+                <a href="{{ url_for('room_view', room_id=room.room_id) }}" style="text-decoration:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--ink); color:var(--surface); padding:12px 14px; margin-bottom:8px; border-radius:6px;">
+                        <span style="font-weight:600;">{{ room.name }}</span>
+                        <span style="font-weight:700; color:var(--gold-light);">{{ room.active_count }}</span>
+                    </div>
+                </a>
+                {% endfor %}
+                <a href="{{ url_for('check_out_list') }}" class="btn btn-ghost btn-sm btn-block" style="margin-top:6px;">دليل الطلاب الحاليين</a>
+            </div>
+        </div>
+
+        <div style="flex:3; min-width:280px;">
+
+            <div class="panel" style="text-align:center;">
+                <a href="{{ url_for('shift_summary_preview') }}" class="btn btn-danger">إنهاء الوردية (مراجعة أولاً)</a>
+            </div>
+
+            <h3>استقبال الطلاب</h3>
+            <div class="action-grid" style="margin-bottom:22px;">
+                <a href="{{ url_for('register_student', next='select_room') }}" class="action-card">
+                    <span class="action-icon">🆕</span>
+                    <h3>تسجيل طالب</h3>
+                    <p>إضافة طالب جديد للنظام</p>
+                </a>
+                <a href="{{ url_for('check_in') }}" class="action-card">
+                    <span class="action-icon">⏱️</span>
+                    <h3>تسجيل دخول</h3>
+                    <p>دخول طالب مسجل مسبقاً</p>
+                </a>
+                <a href="{{ url_for('check_out_list') }}" class="action-card">
+                    <span class="action-icon">💰</span>
+                    <h3>تسجيل خروج ودفع</h3>
+                    <p>إنهاء زيارة وتحصيل الفاتورة</p>
+                </a>
+            </div>
+
+            <h3>الخدمات والمبيعات</h3>
+            <div class="action-grid">
+                <a href="{{ url_for('select_sale_recipient') }}" class="action-card">
+                    <span class="action-icon">☕</span>
+                    <h3>الكافيتريا</h3>
+                    <p>بيع منتج لطالب أو زبون</p>
+                </a>
+                <a href="{{ url_for('library') }}" class="action-card">
+                    <span class="action-icon">📚</span>
+                    <h3>المكتبة</h3>
+                    <p>استعارة وإرجاع الكتب</p>
+                </a>
+                <a href="{{ url_for('reservations') }}" class="action-card">
+                    <span class="action-icon">📅</span>
+                    <h3>حجز القاعات</h3>
+                    <p>حجوزات القاعات الخاصة</p>
+                </a>
+                <a href="{{ url_for('subscriptions_list') }}" class="action-card">
+                    <span class="action-icon">💳</span>
+                    <h3>الاشتراكات</h3>
+                    <p>باقات الطلاب النشطة</p>
+                </a>
+                <a href="{{ url_for('log_expense') }}" class="action-card">
+                    <span class="action-icon">💸</span>
+                    <h3>تسجيل مصروف</h3>
+                    <p>مصروفات نثرية ويومية</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+{% endif %}

@@ -39,14 +39,103 @@ app = Flask(__name__,
             template_folder=TEMPLATE_DIR, 
             static_folder=STATIC_DIR)
 
-app.secret_key = "super_secret_key_fixed"
+def _load_or_create_secret_key():
+    key_path = os.path.join(BASE_DIR, '.secret_key')
+    try:
+        with open(key_path, 'r') as f:
+            key = f.read().strip()
+            if key:
+                return key
+    except FileNotFoundError:
+        pass
+    key = secrets.token_hex(32)
+    with open(key_path, 'w') as f:
+        f.write(key)
+    return key
+
+app.secret_key = _load_or_create_secret_key()
 MANAGER_PHONE = "201070671508"
 
 # --- دالة الاتصال بالداتا بيز (تستخدم المسار الثابت) ---
 def get_db():
     conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row 
+    conn.row_factory = sqlite3.Row
     return conn
+
+# =========================================================
+# 🛡️ حماية CSRF: توكن لكل جلسة، والتحقق منه في أي POST
+# =========================================================
+def get_csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(16)
+    return session['_csrf_token']
+
+@app.context_processor
+def inject_csrf_token():
+    return {'csrf_token': get_csrf_token}
+
+@app.before_request
+def check_csrf_token():
+    if request.method == 'POST':
+        submitted = request.form.get('csrf_token')
+        expected = session.get('_csrf_token')
+        if not expected or not submitted or not secrets.compare_digest(submitted, expected):
+            flash("انتهت صلاحية الجلسة، برجاء المحاولة مرة أخرى.", "error")
+            return redirect(request.referrer or url_for('dashboard'))
+
+# =========================================================
+# 🔒 منع محاولات تخمين كلمة المرور (Brute-force lockout)
+# =========================================================
+_LOGIN_ATTEMPTS = {}
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 60
+
+def is_login_locked(username):
+    entry = _LOGIN_ATTEMPTS.get(username)
+    if not entry:
+        return False
+    count, locked_until = entry
+    if locked_until and datetime.datetime.now() < locked_until:
+        return True
+    return False
+
+def register_failed_login(username):
+    count, _ = _LOGIN_ATTEMPTS.get(username, (0, None))
+    count += 1
+    locked_until = None
+    if count >= LOGIN_MAX_ATTEMPTS:
+        locked_until = datetime.datetime.now() + datetime.timedelta(seconds=LOGIN_LOCKOUT_SECONDS)
+    _LOGIN_ATTEMPTS[username] = (count, locked_until)
+
+def clear_failed_login(username):
+    _LOGIN_ATTEMPTS.pop(username, None)
+
+# =========================================================
+# 🚪 منع الحجز المزدوج للقاعات الخاصة (Private/Meeting)
+# =========================================================
+def is_exclusive_room(room_name):
+    return 'Private' in room_name or 'Meeting' in room_name
+
+def room_has_open_visit(c, room_id):
+    c.execute("SELECT visit_id FROM Visits WHERE room_id=? AND check_out_time IS NULL LIMIT 1", (room_id,))
+    return c.fetchone() is not None
+
+# =========================================================
+# 🔧 ترقية قاعدة البيانات (إضافة أعمدة ناقصة لقواعد البيانات القديمة)
+# =========================================================
+def run_startup_migrations():
+    if not os.path.exists(DATABASE):
+        return
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(Coupons)")
+    columns = [row['name'] for row in c.fetchall()]
+    if 'visit_id' not in columns:
+        c.execute("ALTER TABLE Coupons ADD COLUMN visit_id INTEGER REFERENCES Visits(visit_id)")
+        conn.commit()
+    conn.close()
+
+run_startup_migrations()
 
 # ... (كمل باقي الكود زي ما هو من غير تغيير) ...
 
@@ -120,7 +209,7 @@ def from_flask_run_after_request(func):
     from flask import after_this_request
     return after_this_request(func)
 
-@app.route('/shutdown')
+@app.route('/shutdown', methods=['POST'])
 def shutdown():
     # 1. السماح بالإغلاق للجميع (بدون شرط تسجيل الدخول)
     
@@ -212,6 +301,11 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+
+        if is_login_locked(username):
+            flash(f"تم إيقاف الدخول مؤقتاً بسبب محاولات كثيرة خاطئة. حاول بعد {LOGIN_LOCKOUT_SECONDS} ثانية.", "error")
+            return redirect(url_for('login'))
+
         conn = get_db()
         c = conn.cursor()
         c.execute("SELECT * FROM Users WHERE username = ?", (username,))
@@ -219,12 +313,14 @@ def login():
         conn.close()
 
         if user and check_password_hash(user['password'], password):
+            clear_failed_login(username)
             session['user_id'] = user['user_id']
             session['username'] = user['username']
             session['role'] = user['role']
             session.pop('active_shift_id', None)
             return redirect(url_for('dashboard'))
         else:
+            register_failed_login(username)
             flash("اسم المستخدم أو كلمة المرور غير صحيحة", "error")
             return redirect(url_for('login'))
 
@@ -295,26 +391,28 @@ def dashboard():
         notify_alert = f"⏰ تذكير: حجز ({near_res['client_name']}) الساعة {time_only} - القاعة: {near_res['room_name']}"
     conn.close()
 
+    user_id = session.get('user_id')
+    conn = get_db() # فتحنا اتصال جديد عشان اللي فات اتقفل
+    c = conn.cursor()
+    c.execute("SELECT shift_id FROM Shifts WHERE user_id = ? AND end_time IS NULL", (user_id,))
+    open_shift = c.fetchone()
+    conn.close()
+
+    if open_shift:
+        session['active_shift_id'] = open_shift['shift_id']
+    else:
+        session.pop('active_shift_id', None)
+
     if role == 'manager':
-        return render_template('manager_dashboard.html')
+        return render_template('manager_dashboard.html',
+                               room_stats=room_stats,
+                               notify_alert=notify_alert,
+                               notify_link=notify_link)
 
     elif role == 'employee':
-        user_id = session.get('user_id')
-        conn = get_db() # فتحنا اتصال جديد عشان اللي فات اتقفل
-        c = conn.cursor()
-        c.execute("SELECT shift_id FROM Shifts WHERE user_id = ? AND end_time IS NULL", (user_id,))
-        open_shift = c.fetchone()
-        conn.close()
-
-        if open_shift:
-            session['active_shift_id'] = open_shift['shift_id']
-        else:
-            session.pop('active_shift_id', None)
-
-        # (تعديل) بنبعت notify_alert و notify_link للصفحة
-        return render_template('employee_dashboard.html', 
-                               room_stats=room_stats, 
-                               notify_alert=notify_alert, 
+        return render_template('employee_dashboard.html',
+                               room_stats=room_stats,
+                               notify_alert=notify_alert,
                                notify_link=notify_link)
 
     return redirect(url_for('logout'))# --- عمليات الوردية ---
@@ -353,8 +451,11 @@ def start_shift():
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT shift_id FROM Shifts WHERE user_id = ? AND end_time IS NULL", (user_id,))
-    if c.fetchone():
-        flash("لديك وردية مفتوحة بالفعل", "error")
+    existing = c.fetchone()
+    if existing:
+        # الوردية مفتوحة بالفعل في الداتا بيز لكن السيشن نسيها (مثلاً بعد إعادة تشغيل السيرفر) - نستعيدها
+        session['active_shift_id'] = existing['shift_id']
+        flash("لديك وردية مفتوحة بالفعل، تم استعادتها.", "info")
     else:
         start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         c.execute("INSERT INTO Shifts (user_id, start_time) VALUES (?, ?)", (user_id, start_time))
@@ -622,6 +723,13 @@ def perform_check_in():
         flash("هذا الطالب متواجد بالفعل في النظام ولم يسجل خروج", "error")
         return redirect(url_for('check_in'))
 
+    c.execute("SELECT name FROM Rooms WHERE room_id=?", (rid,))
+    room_row = c.fetchone()
+    if room_row and is_exclusive_room(room_row['name']) and room_has_open_visit(c, rid):
+        conn.close()
+        flash(f"غرفة {room_row['name']} مشغولة حالياً بشخص آخر.", "error")
+        return redirect(url_for('select_room', student_id=sid))
+
     c.execute("""INSERT INTO Visits (student_id, user_id, shift_id, room_id, check_in_time)
                  VALUES (?, ?, ?, ?, ?)""",
               (sid, session['user_id'], session['active_shift_id'], rid, check_in_time))
@@ -679,8 +787,9 @@ def show_invoice(visit_id):
     sales_total = sum(s['total_price'] for s in sales_items)
     # 4. البحث عن اشتراك نشط
     c.execute("""
-        SELECT * FROM StudentSubscriptions 
+        SELECT * FROM StudentSubscriptions
         WHERE student_id = ? AND is_active = 1 AND remaining_hours >= ? AND end_date >= ?
+        ORDER BY end_date ASC
     """, (visit_data['student_id'], duration_hours, now.strftime("%Y-%m-%d")))
     active_sub = c.fetchone()
     
@@ -777,14 +886,18 @@ def apply_coupon(visit_id):
     code = request.form['coupon_code'].upper().strip()
     conn = get_db()
     c = conn.cursor()
+    c.execute("SELECT V.student_id FROM Visits V WHERE V.visit_id=?", (visit_id,))
+    visit_row = c.fetchone()
     c.execute("SELECT * FROM Coupons WHERE code=?", (code,))
     coupon = c.fetchone()
     error = None
     if not coupon: error = "الكود غير موجود"
     elif coupon['is_used']: error = "الكود مستخدم من قبل"
+    elif coupon['student_id'] and visit_row and coupon['student_id'] != visit_row['student_id']:
+        error = "هذا الكوبون مخصص لطالب آخر"
     elif coupon['expiry_date'] and datetime.datetime.strptime(coupon['expiry_date'], '%Y-%m-%d').date() < datetime.datetime.now().date():
         error = "الكود منتهي الصلاحية"
-    
+
     conn.close()
     if error: flash(error, "error")
     return redirect(url_for('show_invoice', visit_id=visit_id, applied_code=code, error_message=error))
@@ -795,9 +908,17 @@ def confirm_payment(visit_id):
     
     payment_method = request.form.get('payment_method', 'cash')
     coupon_code = request.form.get('applied_coupon_code')
-    # استلام الخصم اليدوي
-    manual_disc = float(request.form.get('manual_discount_final', 0))
-    
+    # الخصم اليدوي: بيتحسب من نوعه وقيمته هنا في السيرفر (مش من قيمة جاهزة جاية من المتصفح)
+    manual_disc_type = request.form.get('manual_disc_type', 'fixed')
+    try:
+        manual_disc_value = float(request.form.get('manual_disc_value', 0))
+    except ValueError:
+        manual_disc_value = 0
+    # الخصم الخاص صلاحية مدير فقط، حتى لو اتبعتت قيمة في الطلب من غير المدير
+    if session.get('role') != 'manager':
+        manual_disc_value = 0
+    manual_disc_value = max(0, manual_disc_value)
+
     conn = get_db()
     c = conn.cursor()
     
@@ -824,7 +945,11 @@ def confirm_payment(visit_id):
     
     # 1. لو باقة
     if payment_method == 'subscription':
-        c.execute("SELECT * FROM StudentSubscriptions WHERE student_id=? AND is_active=1", (visit['student_id'],))
+        c.execute("""
+            SELECT * FROM StudentSubscriptions
+            WHERE student_id=? AND is_active=1 AND remaining_hours >= ? AND end_date >= ?
+            ORDER BY end_date ASC
+        """, (visit['student_id'], duration, out_time.strftime("%Y-%m-%d")))
         sub = c.fetchone()
         if sub and sub['remaining_hours'] >= duration:
             new_bal = sub['remaining_hours'] - duration
@@ -853,18 +978,30 @@ def confirm_payment(visit_id):
         elif coupon_code:
             c.execute("SELECT * FROM Coupons WHERE code=?", (coupon_code,))
             cp = c.fetchone()
-            if cp:
+            if cp and not cp['is_used'] and (not cp['student_id'] or cp['student_id'] == visit['student_id']):
                 coupon_id_save = cp['coupon_id']
                 if cp['discount_type'] == 'percentage':
                     disc = final_time_cost * (cp['discount_value'] / 100.0)
                 else:
                     disc = cp['discount_value']
-                
+
                 final_discount = min(disc, final_time_cost)
                 c.execute("UPDATE Coupons SET is_used=1, visit_id=? WHERE coupon_id=?", (visit_id, cp['coupon_id']))
 
-        # ج. إضافة الخصم اليدوي للإجمالي
+        # ج. حساب الخصم اليدوي وإضافته للإجمالي (بحد أقصى تكلفة الوقت المتبقية)
+        remaining_for_manual = max(0, final_time_cost - final_discount)
+        if manual_disc_value > 0:
+            if manual_disc_type == 'percentage':
+                manual_disc = final_time_cost * (manual_disc_value / 100.0)
+            else:
+                manual_disc = manual_disc_value
+            manual_disc = min(manual_disc, remaining_for_manual)
+        else:
+            manual_disc = 0
         final_discount += manual_disc
+        final_discount = max(0, min(final_discount, final_time_cost))
+    else:
+        manual_disc = 0
 
     # تحديث الوردية
     current_shift_id = session.get('active_shift_id')
@@ -1138,14 +1275,19 @@ def add_sale(visit_id):
         # =========================================================
 
         total = 0
+        skipped = []
         c.execute("SELECT * FROM Products")
         prods = c.fetchall()
-        
+
         for p in prods:
             pid = p['product_id']
             qty = int(request.form.get(f"quantity_{pid}", 0))
-            
+
             if qty > 0:
+                if p['stock_quantity'] < qty:
+                    skipped.append(f"{p['name']} (المتاح: {p['stock_quantity']})")
+                    continue
+
                 unit_price = p['sale_price']
                 line_total = 0
 
@@ -1175,6 +1317,8 @@ def add_sale(visit_id):
 
         conn.commit()
         conn.close()
+        if skipped:
+            flash("عفواً، المخزون لا يكفي لهذه المنتجات فتم تجاهلها: " + "، ".join(skipped), "error")
         flash(f"تم تسجيل مبيعات بقيمة {total} ج", "success")
         return redirect(url_for('dashboard'))
 
@@ -1413,7 +1557,7 @@ def manage_students():
 
 @app.route("/delete_student/<int:student_id>", methods=['POST'])
 def delete_student(student_id):
-    if 'user_id' not in session: return redirect(url_for('login'))
+    if session.get('role') != 'manager': return redirect(url_for('dashboard'))
     
     conn = get_db()
     c = conn.cursor()
@@ -1556,8 +1700,8 @@ def import_students():
 
 @app.route('/clean_duplicates')
 def clean_duplicates():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
+    if session.get('role') != 'manager':
+        return redirect(url_for('dashboard'))
 
     conn = get_db()
     c = conn.cursor()
@@ -1638,6 +1782,18 @@ def clean_duplicates():
                 elif b_starts_zero and not a_starts_zero:
                     to_delete.add(rec_a['student_id'])
 
+        # حماية: لا تحذف أي طالب له أي أثر حقيقي في النظام (زيارة، اشتراك، أو كوبون)
+        # حتى لو طابق شرط "التكرار" — عشان منفقدش بيانات أو نكسر زيارة شغالة دلوقتي.
+        if to_delete:
+            c.execute("SELECT DISTINCT student_id FROM Visits")
+            has_visits = {row['student_id'] for row in c.fetchall()}
+            c.execute("SELECT DISTINCT student_id FROM StudentSubscriptions")
+            has_subs = {row['student_id'] for row in c.fetchall()}
+            c.execute("SELECT DISTINCT student_id FROM Coupons WHERE student_id IS NOT NULL")
+            has_coupons = {row['student_id'] for row in c.fetchall()}
+            has_history = has_visits | has_subs | has_coupons
+            to_delete -= has_history
+
         if to_delete:
             c.executemany(
                 "DELETE FROM Students WHERE student_id = ?",
@@ -1646,7 +1802,7 @@ def clean_duplicates():
 
         deleted_count = len(to_delete)
         conn.commit()
-        flash(f"✅ تم حذف {deleted_count} سجل مكرر بنجاح.", "success")
+        flash(f"✅ تم حذف {deleted_count} سجل مكرر بنجاح (تم تجاهل أي تكرار له زيارات أو اشتراكات أو كوبونات سابقة حفاظاً على البيانات).", "success")
     except Exception as e:
         conn.rollback()
         flash(f"❌ حدث خطأ أثناء حذف التكرارات: {str(e)}", "error")
@@ -1661,8 +1817,10 @@ def clean_duplicates():
 # (3) دالة استقبال الخصم اليدوي
 @app.route("/apply_manual_discount/<int:visit_id>", methods=['POST'])
 def apply_manual_discount(visit_id):
-    if 'user_id' not in session: return redirect(url_for('login'))
-    
+    if session.get('role') != 'manager':
+        flash("الخصم الخاص متاح للمدير فقط.", "error")
+        return redirect(url_for('show_invoice', visit_id=visit_id))
+
     # بناخد النوع (نسبة ولا مبلغ) والقيمة
     m_type = request.form.get('manual_type', 'fixed')
     m_value = float(request.form.get('manual_value', 0))
@@ -1672,7 +1830,7 @@ def apply_manual_discount(visit_id):
 
 @app.route("/edit_student/<int:student_id>", methods=['GET', 'POST'])
 def edit_student(student_id):
-    if session.get('role') != 'employee': return redirect(url_for('login'))
+    if 'user_id' not in session: return redirect(url_for('login'))
     conn = get_db()
     c = conn.cursor()
     
@@ -1714,9 +1872,13 @@ def manage_users():
     c = conn.cursor()
     if request.method == 'POST':
         hashed = generate_password_hash(request.form['password'], method='pbkdf2:sha256')
-        c.execute("INSERT INTO Users (username, password, role) VALUES (?, ?, ?)", 
-                  (request.form['username'], hashed, request.form['role']))
-        conn.commit()
+        try:
+            c.execute("INSERT INTO Users (username, password, role) VALUES (?, ?, ?)",
+                      (request.form['username'], hashed, request.form['role']))
+            conn.commit()
+            flash("تم إضافة المستخدم بنجاح.", "success")
+        except sqlite3.IntegrityError:
+            flash("اسم المستخدم موجود بالفعل، اختر اسماً آخر.", "error")
     c.execute("SELECT * FROM Users WHERE role='employee'")
     emps = c.fetchall()
     conn.close()
@@ -1790,17 +1952,22 @@ def edit_sale_quantity(sale_id):
             
             if INTERNET_CARD_NAME in prod_name and sale['visit_id']:
                 # 1. بنشوف الطالب ده أخد كام كارت في عمليات تانية "غير" اللي بنعدلها دلوقتي
-                c.execute("""SELECT SUM(quantity) FROM Sales 
-                             WHERE visit_id=? AND product_id=? AND sale_id != ?""", 
+                c.execute("""SELECT SUM(quantity) FROM Sales
+                             WHERE visit_id=? AND product_id=? AND sale_id != ?""",
                           (sale['visit_id'], sale['product_id'], sale_id))
                 prev_qty = c.fetchone()[0] or 0
-                
+
+                # 1.5. بنجيب حد الكروت المجانية من الإعدادات (نفس المنطق المستخدم في إضافة البيع)
+                c.execute("SELECT setting_value FROM Settings WHERE setting_key='internet_free_limit'")
+                limit_row = c.fetchone()
+                free_limit = int(limit_row['setting_value']) if limit_row else 2
+
                 # 2. بنحسب سعر الكمية الجديدة حتة حتة بناءً على اللي أخده قبل كدة
                 for i in range(1, new_quantity + 1):
-                    if (prev_qty + i) <= 2: # أول كرتين فري (الـ limit بتاعك)
+                    if (prev_qty + i) <= free_limit:
                         new_total_price += 0
                     else:
-                        new_total_price += sale['sale_price'] # اللي بعد كدة بـ 5ج
+                        new_total_price += sale['sale_price'] # اللي بعد الحد المجاني
             else:
                 # 3. لو منتج عادي (شاي، قهوة) يحسب الكمية في السعر فوراً
                 new_total_price = new_quantity * sale['sale_price']
@@ -1856,10 +2023,15 @@ def delete_sale_item(sale_id):
     # المسموح لهم بالحذف: المدير (في أي وقت) أو الموظف (لو الزيارة لسه مفتوحة)
     if is_manager or is_visit_open:
         # أ. رجع الكمية للمخزن
-        c.execute("UPDATE Products SET stock_quantity = stock_quantity + ? WHERE product_id=?", 
+        c.execute("UPDATE Products SET stock_quantity = stock_quantity + ? WHERE product_id=?",
                   (sale['quantity'], sale['product_id']))
-        
-        # ب. احذف البيعة
+
+        # ب. اخصم قيمة البيعة المحذوفة من إجمالي مبيعات الوردية
+        if sale['shift_id']:
+            c.execute("UPDATE Shifts SET revenue_sales = revenue_sales - ? WHERE shift_id = ?",
+                      (sale['total_price'], sale['shift_id']))
+
+        # ج. احذف البيعة
         c.execute("DELETE FROM Sales WHERE sale_id=?", (sale_id,))
         conn.commit()
         flash("تم حذف المنتج من الفاتورة.", "success")
@@ -1938,7 +2110,7 @@ def generate_coupon(student_id):
         conn.commit()
         
         msg = f"أهلا {student['name']}، ليك كوبون خصم {val}" + ("%" if dt=='percentage' else "ج") + f" الكود: {code}"
-        link = f"https://wa.me/20{student['phone'][1:]}?text={msg}"
+        link = f"https://wa.me/20{student['phone'][1:]}?text={urllib.parse.quote(msg)}"
         conn.close()
         return redirect(url_for('coupon_created', student_name=student['name'], coupon_code=code, coupon_value=val, coupon_type=dt, whatsapp_link=link))
 
@@ -1948,12 +2120,16 @@ def generate_coupon(student_id):
 
 @app.route("/coupon_created")
 def coupon_created():
-    return render_template('coupon_created.html', 
+    if session.get('role') != 'manager': return redirect(url_for('dashboard'))
+    whatsapp_link = request.args.get('whatsapp_link', '')
+    if not whatsapp_link.startswith('https://wa.me/'):
+        whatsapp_link = None
+    return render_template('coupon_created.html',
                            student_name=request.args.get('student_name'),
                            coupon_code=request.args.get('coupon_code'),
                            coupon_value=request.args.get('coupon_value'),
                            coupon_type=request.args.get('coupon_type'),
-                           whatsapp_link=request.args.get('whatsapp_link'))
+                           whatsapp_link=whatsapp_link)
 
 @app.route("/manage_coupons")
 def manage_coupons():
@@ -2294,9 +2470,8 @@ def reservations():
     
     conn.close()
    # بنجهز أقل قيمة ممكنة للإدخال في HTML (التاريخ والوقت الحالي)
-    today_min = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M") 
-    
-    conn.close()
+    today_min = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
+
     return render_template('reservations.html', reservations=res_list, rooms=rooms, today_min=today_min)
 
 
@@ -2379,28 +2554,31 @@ def switch_room(visit_id):
     student_name = visit_data[1]
 
     # ========================================================
-    # 2. التعديل هنا: استبعاد غرفة Private من القائمة
+    # 2. استبعاد القاعات الخاصة (Private/Meeting) من قائمة النقل
+    #    (زي منطق منع الحجز المزدوج في تسجيل الدخول)
     # ========================================================
-    c.execute("SELECT name, room_id FROM Rooms WHERE name != 'Private'")
-    all_rooms = c.fetchall()
+    c.execute("SELECT name, room_id FROM Rooms")
+    all_rooms = [r for r in c.fetchall() if not is_exclusive_room(r['name'])]
 
     if request.method == 'POST':
         new_room_name = request.form['new_room']
-        
+
         # نجيب الـ ID للغرفة الجديدة
         c.execute("SELECT room_id FROM Rooms WHERE name = ?", (new_room_name,))
         room_result = c.fetchone()
-        
-        if room_result:
-            new_room_id = room_result[0]
-            
+
+        if not room_result:
+            flash("❌ الغرفة غير موجودة", "error")
+        elif is_exclusive_room(new_room_name) and room_has_open_visit(c, room_result['room_id']):
+            flash(f"غرفة {new_room_name} مشغولة حالياً بشخص آخر.", "error")
+        else:
+            new_room_id = room_result['room_id']
+
             # تحديث الزيارة
             c.execute("UPDATE Visits SET room_id = ? WHERE visit_id = ?", (new_room_id, visit_id))
             conn.commit()
             flash(f"✅ تم نقل الطالب ({student_name}) إلى {new_room_name} بنجاح", "success")
-        else:
-            flash("❌ الغرفة غير موجودة", "error")
-            
+
         conn.close()
         return redirect(url_for('dashboard'))
 
@@ -2440,9 +2618,17 @@ def start_reservation_visit(res_id):
                   (res['client_name'], res['phone'], 'Meeting Client'))
         student_id = c.lastrowid
     
+    # 2.5 التأكد إن القاعة (لو خاصة) مش مشغولة بزيارة تانية دلوقتي
+    c.execute("SELECT name FROM Rooms WHERE room_id=?", (res['room_id'],))
+    room_row = c.fetchone()
+    if room_row and is_exclusive_room(room_row['name']) and room_has_open_visit(c, res['room_id']):
+        conn.close()
+        flash(f"غرفة {room_row['name']} مشغولة حالياً بشخص آخر.", "error")
+        return redirect(url_for('reservations'))
+
     # 3. ابدأ الزيارة (Check-in) واربطها بالحجز
     check_in_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     try:
         c.execute("""
             INSERT INTO Visits (student_id, user_id, shift_id, room_id, check_in_time, reservation_id)

@@ -102,7 +102,9 @@ def create_database():
         is_used INTEGER NOT NULL DEFAULT 0,
         expiry_date DATETIME,
         student_id INTEGER,
-        FOREIGN KEY(student_id) REFERENCES Students(student_id)
+        visit_id INTEGER,
+        FOREIGN KEY(student_id) REFERENCES Students(student_id),
+        FOREIGN KEY(visit_id) REFERENCES Visits(visit_id)
     );
     """)
 

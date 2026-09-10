@@ -2,40 +2,37 @@
 {% block title %}اختيار الأوضة{% endblock %}
 
 {% block content %}
-    <h1>تسجيل دخول الطالب: {{ student.name }}</h1>
-    <p>تليفون: {{ student.phone }}</p>
-    <hr>
+    <h1 class="page-title">تسجيل دخول الطالب: {{ student.name }}</h1>
+    <p class="page-subtitle">تليفون: {{ student.phone }}</p>
 
-    <form action="{{ url_for('perform_check_in') }}" method="POST">
-    <input type="hidden" name="student_id" value="{{ student.student_id }}">
-    <input type="hidden" name="manual_time" value="{{ manual_time }}">
-    <input type="hidden" name="manual_date" value="{{ manual_date }}">
-    
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="room_id" style="font-weight: bold; font-size: 18px;">الرجاء اختيار الأوضة:</label>
+    <div class="panel" style="max-width: 560px; margin: 0 auto;">
+        <form action="{{ url_for('perform_check_in') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="student_id" value="{{ student.student_id }}">
+        <input type="hidden" name="manual_time" value="{{ manual_time }}">
+        <input type="hidden" name="manual_date" value="{{ manual_date }}">
 
-            <select name="room_id" id="room_id" required 
-                    style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; margin-top: 10px;">
+            <div class="form-group">
+                <label for="room_id">الرجاء اختيار الأوضة:</label>
 
-                <option value="">-- اختر الأوضة --</option>
+                <select name="room_id" id="room_id" required>
 
-                {% for room in rooms %}
-                    <option value="{{ room.room_id }}">
-                        {{ room.name }} (الساعة بـ {{ room.hourly_rate }} جنيه)
-                    </option>
-                {% endfor %}
+                    <option value="">-- اختر الأوضة --</option>
 
-            </select>
-        </div>
+                    {% for room in rooms %}
+                        <option value="{{ room.room_id }}">
+                            {{ room.name }} (الساعة بـ {{ room.hourly_rate }} جنيه)
+                        </option>
+                    {% endfor %}
 
-        <button type="submit" style="font-size: 18px; padding: 12px 25px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            تأكيد تسجيل الدخول (Check-in)
-        </button>
+                </select>
+            </div>
 
-        <a href="{{ url_for('check_in') }}" style="margin-right: 15px; text-decoration: none; color: #6c757d;">
-            إلغاء (العودة للبحث)
-        </a>
+            <button type="submit" class="btn btn-success btn-lg btn-block">تأكيد تسجيل الدخول (Check-in)</button>
 
-    </form>
+            <a href="{{ url_for('check_in') }}" class="btn-back" style="display: block; text-align: center;">إلغاء (العودة للبحث)</a>
+
+        </form>
+    </div>
 
 {% endblock %}

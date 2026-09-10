@@ -3,114 +3,480 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}نظام الـ Workspace{% endblock %}</title>
+    <title>{% block title %}تاسك | مساحة العمل{% endblock %}</title>
     <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa;
+        :root {
+            --ink: #16233D;
+            --ink-2: #2B3D5C;
+            --blue: #2B5FA0;
+            --gold: #B98A2A;
+            --gold-light: #E4D2A6;
+            --paper: #F1E7D2;
+            --surface: #FBF8F2;
+            --line: #DDD2B8;
+            --muted: #7A7059;
+            --success: #2F6F4E;
+            --success-soft: #DEEAE1;
+            --warning: #B36A1E;
+            --warning-soft: #F3E3C8;
+            --danger: #A23B32;
+            --danger-soft: #F2DCD8;
+            --info: #2B5FA0;
+            --info-soft: #DCE6F1;
+            --radius: 8px;
+            --radius-sm: 6px;
+            --font-serif: 'Amiri', 'Traditional Arabic', serif;
+            --font-sans: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
             margin: 0;
             padding: 0;
         }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--paper);
+            color: var(--ink);
+            line-height: 1.65;
+            font-size: 15px;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: var(--font-serif);
+            color: var(--ink);
+            font-weight: 700;
+            margin: 0 0 8px;
+            line-height: 1.35;
+        }
+        h1 { font-size: 1.9em; }
+        h2 { font-size: 1.5em; }
+        h3 { font-size: 1.2em; }
+
+        p { color: var(--ink-2); }
+
+        a { color: var(--blue); }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--line);
+            margin: 24px 0;
+        }
+
+        /* ---------- عنوان الصفحة (خط ذهبي تحته) ---------- */
+        .page-title {
+            position: relative;
+            padding-bottom: 14px;
+            margin-bottom: 22px;
+        }
+        .page-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 52px;
+            height: 3px;
+            background: var(--gold);
+            border-radius: 2px;
+        }
+        .page-subtitle {
+            color: var(--muted);
+            margin-top: -14px;
+            margin-bottom: 22px;
+            font-size: 0.95em;
+        }
+
+        /* ---------- شريط التنقل العلوي (الغلاف) ---------- */
         .navbar {
-            background-color: #fff;
-            border-bottom: 1px solid #dee2e6;
-            padding: 15px 30px;
+            background-color: var(--ink);
+            border-bottom: 3px solid var(--gold);
+            padding: 10px 28px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            flex-wrap: wrap;
+            gap: 12px;
         }
-        
-        .navbar .logo {
-            font-size: 24px;
-            font-weight: bold;
-            color: #1ca877ff;
-            text-decoration: none; /* إزالة الخط */
+        .navbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
         }
-        
+        .navbar .brand img {
+            height: 42px;
+            width: 42px;
+            object-fit: contain;
+            background: var(--surface);
+            border-radius: 50%;
+            padding: 3px;
+        }
+        .navbar .brand-text {
+            font-family: var(--font-serif);
+            color: var(--surface);
+            font-size: 1.25em;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .navbar .brand-text small {
+            display: block;
+            font-family: var(--font-sans);
+            font-size: 0.4em;
+            font-weight: 500;
+            color: var(--gold-light);
+            letter-spacing: 0.03em;
+        }
+        .navbar .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .navbar .nav-links a {
+            display: inline-block;
+            color: rgba(251, 248, 242, 0.82);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92em;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .navbar .nav-links a:hover {
+            color: var(--surface);
+            background: rgba(251, 248, 242, 0.08);
+        }
         .navbar .user-info {
             display: flex;
             align-items: center;
+            gap: 14px;
         }
-        .navbar .user-info span {
-            margin-left: 20px;
+        .navbar .user-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--surface);
+            font-size: 0.9em;
+        }
+        .navbar .role-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.78em;
+            font-weight: 700;
+            background: var(--gold);
+            color: var(--ink);
         }
         .navbar .logout-btn {
-            color: #dc3545;
+            color: var(--danger-soft);
             text-decoration: none;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9em;
+            border: 1px solid rgba(242, 220, 216, 0.35);
+            padding: 7px 13px;
+            border-radius: var(--radius-sm);
+            transition: background-color 0.15s ease;
         }
         .navbar .logout-btn:hover {
-            text-decoration: underline;
+            background: rgba(162, 59, 50, 0.35);
         }
-        .content-container {
-            max-width: 1200px;
-            margin: 30px auto; 
-            padding: 20px;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        .navbar .shutdown-form button {
+            color: var(--surface);
+            background-color: transparent;
+            border: 1px solid rgba(251, 248, 242, 0.3);
+            font-weight: 600;
+            cursor: pointer;
+            padding: 7px 13px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .navbar .shutdown-form button:hover {
+            background-color: var(--danger);
+            border-color: var(--danger);
+        }
+
+        /* ---------- الرسائل ---------- */
+        .flash-wrap {
+            max-width: 1180px;
+            margin: 16px auto 0;
+            padding: 0 24px;
         }
         .flash-message {
-            padding: 15px;
-            margin: 0 auto 20px auto;
-            border-radius: 6px;
-            font-weight: bold;
-            text-align: center;
-            max-width: 1200px;
+            padding: 13px 16px;
+            margin-bottom: 10px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.95em;
+            border-right: 4px solid transparent;
         }
-        .flash-message.error { background-color: #f8d7da; color: #721c24; }
-        .flash-message.success { background-color: #d4edda; color: #155724; }
-        .flash-message.info { background-color: #d1ecf1; color: #0c5460; }
-        .flash-message.info_dark { background-color: #d6d8db; color: #1b1e21; font-weight: bold; }
-        
-        .btn-back {
-            display: inline-block;
-            margin-top: 20px;
+        .flash-message.error { background-color: var(--danger-soft); color: var(--danger); border-right-color: var(--danger); }
+        .flash-message.success { background-color: var(--success-soft); color: var(--success); border-right-color: var(--success); }
+        .flash-message.info { background-color: var(--info-soft); color: var(--info); border-right-color: var(--info); }
+        .flash-message.info_dark { background-color: var(--warning-soft); color: var(--warning); border-right-color: var(--warning); font-weight: 700; }
+
+        /* ---------- حاوية المحتوى ---------- */
+        .content-container {
+            max-width: 1180px;
+            margin: 24px auto 60px;
+            padding: 0 24px;
+        }
+
+        /* ---------- الألواح/البطاقات ---------- */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            margin-bottom: 20px;
+        }
+
+        /* ---------- الأزرار ---------- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
             padding: 10px 20px;
-            background-color: #6c757d;
-            color: white;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-sans);
+            font-weight: 600;
+            font-size: 0.95em;
+            border: 1px solid transparent;
+            cursor: pointer;
             text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
+            line-height: 1.3;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
         }
-        .btn-back:hover {
-            background-color: #5a6268;
+        .btn:active { transform: translateY(1px); }
+        .btn-primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+        .btn-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+        .btn-accent { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+        .btn-accent:hover { background: #a67c25; border-color: #a67c25; }
+        .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+        .btn-success:hover { background: #275c40; border-color: #275c40; }
+        .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+        .btn-danger:hover { background: #872f28; border-color: #872f28; }
+        .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+        .btn-ghost:hover { border-color: var(--ink); background: rgba(22, 35, 61, 0.04); }
+        .btn-outline-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+        .btn-outline-danger:hover { background: var(--danger); color: #fff; }
+        .btn-block { width: 100%; }
+        .btn-lg { padding: 15px 26px; font-size: 1.05em; }
+        .btn-sm { padding: 6px 12px; font-size: 0.85em; }
+        .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 20px;
+            padding: 10px 18px;
+            background-color: transparent;
+            color: var(--ink);
+            text-decoration: none;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.92em;
+            transition: border-color 0.15s ease;
+        }
+        .btn-back:hover { border-color: var(--ink); }
+
+        /* ---------- الجداول ---------- */
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+        table.ledger {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.93em;
+        }
+        table.ledger th {
+            text-align: right;
+            background: var(--ink);
+            color: var(--surface);
+            font-weight: 600;
+            padding: 12px 14px;
+            white-space: nowrap;
+        }
+        table.ledger td {
+            padding: 11px 14px;
+            border-top: 1px solid var(--line);
+            color: var(--ink);
+            vertical-align: middle;
+        }
+        table.ledger tbody tr:hover td {
+            background: rgba(185, 138, 42, 0.06);
+        }
+        table.ledger td.num, table.ledger th.num {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        /* ---------- الشارات ---------- */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 11px;
+            border-radius: 999px;
+            font-size: 0.8em;
+            font-weight: 700;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .badge-success { background: var(--success-soft); color: var(--success); border-color: rgba(47,111,78,0.25); }
+        .badge-warning { background: var(--warning-soft); color: var(--warning); border-color: rgba(179,106,30,0.25); }
+        .badge-danger { background: var(--danger-soft); color: var(--danger); border-color: rgba(162,59,50,0.25); }
+        .badge-info { background: var(--info-soft); color: var(--info); border-color: rgba(43,95,160,0.25); }
+        .badge-gold { background: var(--gold-light); color: #6b4e17; border-color: rgba(185,138,42,0.35); }
+
+        /* ---------- النماذج ---------- */
+        .form-group { margin-bottom: 16px; }
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: var(--ink);
+            margin-bottom: 6px;
+        }
+        input[type=text], input[type=password], input[type=number], input[type=date],
+        input[type=datetime-local], input[type=tel], input[type=email], input[type=file],
+        select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            background: var(--surface);
+            color: var(--ink);
+            font-family: var(--font-sans);
+            font-size: 0.95em;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(185, 138, 42, 0.22);
+        }
+        input[readonly] { background: var(--paper); color: var(--muted); }
+
+        /* ---------- بلاطات الإحصائيات ---------- */
+        .stat-tile {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-right: 4px solid var(--gold);
+            border-radius: var(--radius);
+            padding: 16px 18px;
+        }
+        .stat-tile .stat-value {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            font-size: 1.8em;
+            color: var(--ink);
+            line-height: 1.15;
+        }
+        .stat-tile .stat-label {
+            font-size: 0.82em;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        /* ---------- شبكة الإجراءات (لوحة التحكم) ---------- */
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 14px;
+        }
+        .action-card {
+            display: block;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            text-decoration: none;
+            color: var(--ink);
+            transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+        .action-card:hover {
+            border-color: var(--gold);
+            transform: translateY(-2px);
+        }
+        .action-card .action-icon { font-size: 1.4em; margin-bottom: 8px; display: block; }
+        .action-card h3 { margin: 0 0 4px; font-size: 1.05em; }
+        .action-card p { margin: 0; font-size: 0.85em; color: var(--muted); }
+
+        /* ---------- شريط الحالة (وردية مفتوحة/مغلقة) ---------- */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.9em;
+        }
+        .status-pill.open { background: var(--success-soft); color: var(--success); }
+        .status-pill.closed { background: var(--danger-soft); color: var(--danger); }
+        .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+        @media (max-width: 720px) {
+            .navbar { padding: 10px 16px; }
+            .navbar .nav-links { order: 3; width: 100%; justify-content: center; }
+            .content-container { padding: 0 14px; }
         }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    
-   <nav class="navbar">
-        <a href="{{ url_for('dashboard') }}" class="logo">Task Workspace</a>
-        
-        <div class="user-info">
 
+    <nav class="navbar">
+        <a href="{{ url_for('dashboard') }}" class="brand">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="تاسك">
+            <span class="brand-text">تاسك<small>TASK WORKSPACE</small></span>
+        </a>
 
-{% if session.get('role') in ['manager', 'employee'] %}
-            <a href="{{ url_for('manage_students') }}" style="margin-left: 20px; text-decoration: none; color: #007bff; font-weight: bold;">
-                👨‍🎓 إدارة الطلاب
-            </a>
-        {% endif %}
-
-            <a href="{{ url_for('shutdown') }}" 
-               onclick="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');" 
-               style="color: #fff; background-color: #dc3545; font-weight: bold; text-decoration: none; margin-left: 20px; padding: 8px 15px; border-radius: 5px; font-size: 14px;">
-                🛑 إغلاق النظام
-            </a>
-
-            {% if session.get('username') %}
-                <span style="margin-left: 15px;">أهلاً، <strong>{{ session.get('username') }}</strong> </span>
-                <a href="{{ url_for('logout') }}" class="logout-btn">تسجيل الخروج</a>
+        <div class="nav-links">
+            {% if session.get('role') in ['manager', 'employee'] %}
+                <a href="{{ url_for('dashboard') }}">لوحة التحكم</a>
+                <a href="{{ url_for('manage_students') }}">إدارة الطلاب</a>
             {% endif %}
         </div>
+
+        <div class="user-info">
+            {% if session.get('username') %}
+                <div class="user-chip">
+                    <span>{{ session.get('username') }}</span>
+                    {% if session.get('role') == 'manager' %}
+                        <span class="role-badge">مدير</span>
+                    {% else %}
+                        <span class="role-badge">موظف</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('logout') }}" class="logout-btn">خروج</a>
+            {% endif %}
+            <form action="{{ url_for('shutdown') }}" method="POST" class="shutdown-form"
+                  onsubmit="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit">إغلاق النظام</button>
+            </form>
+        </div>
     </nav>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash-message {{ category }}">{{ message }}</div>
-            {% endfor %}
+            <div class="flash-wrap">
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
         {% endif %}
     {% endwith %}
 

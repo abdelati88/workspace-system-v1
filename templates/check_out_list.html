@@ -2,38 +2,36 @@
 {% block title %}تسجيل خروج طالب{% endblock %}
 
 {% block content %}
-    <h1>الطلاب الموجودون حالياً (Check-out)</h1>
-    <p>اضغط "خروج" بجانب الطالب الذي تريد تسجيل خروجه وحساب تكلفته.</p>
-    <hr>
+    <h1 class="page-title">الطلاب الموجودون حالياً (Check-out)</h1>
+    <p class="page-subtitle">اضغط "خروج" بجانب الطالب الذي تريد تسجيل خروجه وحساب تكلفته.</p>
 
-    <div class="student-list" style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
 
         {% if active_visits %}
             {% for visit in active_visits %}
-                <div class="student-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px;">
+                <div class="panel" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; padding: 15px 18px;">
                     <div>
-                        <strong style="font-size: 18px;">{{ visit.name }}</strong>
+                        <strong style="font-size: 1.1em;">{{ visit.name }}</strong>
                         <br>
-                        <span style="color: #555;">تليفون: {{ visit.phone }}</span>
+                        <span style="color: var(--muted);">تليفون: {{ visit.phone }}</span>
                         <br>
-                        <span style="color: #007bff;">وقت الدخول: {{ visit.check_in_time }}</span>
+                        <span style="color: var(--blue);">وقت الدخول: {{ visit.check_in_time }}</span>
                     </div>
                     <div>
-                        <a href="{{ url_for('show_invoice', visit_id=visit.visit_id) }}" 
-                           style="padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px;">
+                        <a href="{{ url_for('show_invoice', visit_id=visit.visit_id) }}" class="btn btn-danger btn-sm">
                             تسجيل خروج (وحساب)
                         </a>
                     </div>
                 </div>
             {% endfor %}
         {% else %}
-            <p style="color: green; font-weight: bold;">لا يوجد أي طلاب مسجلين دخول حالياً.</p>
+            <p style="color: var(--success); font-weight: bold;">لا يوجد أي طلاب مسجلين دخول حالياً.</p>
         {% endif %}
 
     </div>
 
     <a href="javascript:history.back()" class="btn-back">
-    &larr; رجوع (Back)
+    رجوع
 </a>
 
 {% endblock %}

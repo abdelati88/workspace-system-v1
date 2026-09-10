@@ -12,97 +12,82 @@
             .no-print { display: none !important; }
 
             /* إظهار الريسيت وإجباره على الظهور */
-            #print-section, #print-section * { 
-                visibility: visible; 
-                display: block !important; 
+            #print-section, #print-section * {
+                visibility: visible;
+                display: block !important;
             }
-            
+
             /* ضبط مكان الريسيت في أعلى الورقة */
-            #print-section { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 100%; 
+            #print-section {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
             }
         }
-        
+
         /* تنسيق جدول الريسيت (للورقة) */
         .receipt-table td { padding: 5px 0; border-bottom: 1px dashed #333; }
-
-        /* ========================================= */
-        /* 2. تنسيق جدول الشاشة (تصميمك الأصلي)      */
-        /* ========================================= */
-        .screen-table {
-            width: 80%; 
-            margin: 20px auto; 
-            border-collapse: collapse; 
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .screen-table td {
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 1.1em;
-        }
-        .screen-table tr:last-child td { border-bottom: none; }
     </style>
 
     <div class="no-print" style="text-align: center; padding: 30px;">
-        <h1 style="color: #28a745;">✅ تم إنهاء الوردية بنجاح</h1>
-        
-        <div style="background: #e3f2fd; display: inline-block; padding: 10px 40px; border-radius: 15px; margin-bottom: 20px;">
-            <h3 style="margin:0; color: #555;">صافي الدرج</h3>
-            <h1 style="color: #007bff; font-size: 3.5em; margin: 5px 0;">{{ "%.2f"|format(data.net_cash) }} ج</h1>
+        <h1 style="color: var(--success);">✅ تم إنهاء الوردية بنجاح</h1>
+
+        <div class="panel" style="display: inline-block; background: var(--info-soft); border-color: rgba(43,95,160,0.25);">
+            <h3 style="margin:0; color: var(--muted);">صافي الدرج</h3>
+            <h1 style="color: var(--blue); font-size: 3em; margin: 5px 0;">{{ "%.2f"|format(data.net_cash) }} ج</h1>
         </div>
 
-        <table class="screen-table">
-            <tr style="background-color: #f8f9fa;">
-                <td style="text-align: right; font-weight: bold;">نوع الإيراد</td>
-                <td style="text-align: left; font-weight: bold;">المبلغ</td>
+        <div class="table-wrap" style="max-width: 640px; margin: 20px auto;">
+        <table class="ledger">
+            <tr style="background: var(--paper);">
+                <td style="font-weight: bold;">نوع الإيراد</td>
+                <td class="num" style="font-weight: bold;">المبلغ</td>
             </tr>
             <tr>
-                <td style="text-align: right;">🏠 قاعات مشتركة (Shared/Silent)</td>
-                <td style="text-align: left; color: green;">{{ "%.2f"|format(data.rev_shared) }} ج</td>
+                <td>🏠 قاعات مشتركة (Shared/Silent)</td>
+                <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.rev_shared) }} ج</td>
             </tr>
             <tr>
-                <td style="text-align: right;">🔑 قاعات خاصة (Private/Meeting)</td>
-                <td style="text-align: left; color: green;">{{ "%.2f"|format(data.rev_private) }} ج</td>
+                <td>🔑 قاعات خاصة (Private/Meeting)</td>
+                <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.rev_private) }} ج</td>
             </tr>
             <tr>
-                <td style="text-align: right;">☕ مبيعات الكافيتريا</td>
-                <td style="text-align: left; color: green;">{{ "%.2f"|format(data.rev_sales) }} ج</td>
+                <td>☕ مبيعات الكافيتريا</td>
+                <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.rev_sales) }} ج</td>
             </tr>
             <tr>
-                <td style="text-align: right;">💸 مصروفات</td>
-                <td style="text-align: left; color: red;">- {{ "%.2f"|format(data.expenses) }} ج</td>
+                <td>💸 مصروفات</td>
+                <td class="num" style="color: var(--danger);">- {{ "%.2f"|format(data.expenses) }} ج</td>
             </tr>
             <tr>
-                <td style="text-align: right;">🏷️ خصومات</td>
-                <td style="text-align: left; color: orange;">- {{ "%.2f"|format(data.discounts) }} ج</td>
+                <td>🏷️ خصومات</td>
+                <td class="num" style="color: var(--warning);">- {{ "%.2f"|format(data.discounts) }} ج</td>
             </tr>
         </table>
+        </div>
 
-        <div style="margin-top: 30px;">
-            <button onclick="window.print()" style="background: #6c757d; color: white; padding: 12px 25px; font-size: 18px; border: none; cursor: pointer; border-radius: 5px; margin-left: 10px;">
+        <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button onclick="window.print()" class="btn btn-ghost btn-lg">
                 🖨️ طباعة الريسيت
             </button>
-            
-            <a href="{{ whatsapp_link }}" target="_blank" style="background: #25D366; color: white; padding: 12px 25px; font-size: 18px; text-decoration: none; border-radius: 5px;">
+
+            <a href="{{ whatsapp_link }}" target="_blank" class="btn btn-success btn-lg">
                 WhatsApp
             </a>
         </div>
-        <br><a href="{{ url_for('dashboard') }}">عودة للرئيسية</a>
+        <a href="{{ url_for('dashboard') }}" class="btn-back" style="margin-top: 20px;">عودة للرئيسية</a>
     </div>
 
     <div id="print-section" style="display:none;">
         <div style="width: 300px; margin: auto; font-family: 'Courier New', monospace; text-align: center; border: 1px solid #000; padding: 10px;">
-            
+
             <h3 style="margin: 5px 0;">SHIFT REPORT 📊</h3>
             <p style="font-size: 12px; margin: 5px 0;">{{ data.end_time }}</p>
             <p style="font-size: 12px; margin: 0;">Emp: {{ data.employee }}</p>
-            
+
             <hr style="border-top: 1px dashed black;">
-            
+
             <table class="receipt-table" style="width: 100%; font-size: 14px; border-collapse: collapse;">
                 <tr>
                     <td style="text-align: left;">Shared Rooms (+)</td>
@@ -129,14 +114,14 @@
                 </tr>
                 {% endif %}
             </table>
-            
+
             <hr style="border-top: 2px solid black;">
-            
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
                 <span style="font-weight: bold; font-size: 16px;">NET CASH:</span>
                 <span style="font-weight: bold; font-size: 20px;">{{ "%.2f"|format(data.net_cash) }}</span>
             </div>
-            
+
             <hr style="border-top: 2px solid black;">
             <p style="font-size: 12px;">System Generated Report</p>
         </div>

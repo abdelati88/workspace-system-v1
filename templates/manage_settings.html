@@ -2,28 +2,28 @@
 {% block title %}إعدادات النظام{% endblock %}
 
 {% block content %}
-    <h1>⚙️ إعدادات النظام العامة</h1>
-    <hr>
-    
-    <div style="background-color: #f9f9f9; padding: 30px; border-radius: 8px; border: 1px solid #ddd; max-width: 600px; margin: 0 auto;">
+    <h1 class="page-title">⚙️ إعدادات النظام العامة</h1>
+
+    <div class="panel" style="max-width: 600px; margin: 0 auto;">
         <form action="{{ url_for('manage_settings') }}" method="POST">
-            
-            <h3 style="margin-top: 0; color: #007bff;">🌐 إعدادات كروت النت</h3>
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label for="internet_limit" style="font-weight: bold; font-size: 1.1em;">عدد الكروت المجانية لكل طالب (في الزيارة الواحدة):</label>
-                <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <h3 style="color: var(--blue);">🌐 إعدادات كروت النت</h3>
+            <div class="form-group">
+                <label for="internet_limit">عدد الكروت المجانية لكل طالب (في الزيارة الواحدة):</label>
+                <p style="color: var(--muted); font-size: 0.9em; margin-top: 5px;">
                     مثال: لو كتبت <strong>2</strong>، الطالب هياخد أول كارتين بـ 0 جنيه، والتالت بفلوس.
                     <br>لو كتبت <strong>0</strong>، مفيش حاجة ببلاش وكل الكروت بفلوس.
                 </p>
-                <input type="number" id="internet_limit" name="internet_free_limit" 
-                       value="{{ current_limit }}" 
-                       min="0" required 
-                       style="width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ccc; border-radius: 5px; text-align: center;">
+                <input type="number" id="internet_limit" name="internet_free_limit"
+                       value="{{ current_limit }}"
+                       min="0" required
+                       style="text-align: center; font-size: 18px; padding: 15px;">
             </div>
 
             <!-- أسعار شرائح الغرف المشتركة/الصامتة -->
-            <h3 style="margin-top: 30px; color: #007bff;">💰 أسعار شرائح الغرف المشتركة/الصامتة</h3>
-            <div class="form-group" style="margin-bottom: 20px;">
+            <h3 style="margin-top: 30px; color: var(--blue);">💰 أسعار شرائح الغرف المشتركة/الصامتة</h3>
+            <div class="form-group">
                 {% for key, label in [
                     ('tier_price_1h', 'حتى ساعة واحدة'),
                     ('tier_price_3h', 'حتى 3 ساعات'),
@@ -33,22 +33,18 @@
                     ('tier_price_16h', 'حتى 16 ساعة'),
                     ('tier_price_24h', 'حتى 24 ساعة')
                 ] %}
-                    <label for="{{ key }}" style="font-weight: bold;">{{ label }}:</label>
-                    <input type="number" id="{{ key }}" name="{{ key }}" value="{{ tier_prices[key] }}" min="0" required style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                    <label for="{{ key }}">{{ label }}:</label>
+                    <input type="number" id="{{ key }}" name="{{ key }}" value="{{ tier_prices[key] }}" min="0" required style="margin-bottom: 10px;">
                 {% endfor %}
             </div>
 
-            <button type="submit" style="width: 100%; font-size: 18px; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                حفظ الإعدادات
-            </button>
-            
+            <button type="submit" class="btn btn-success btn-lg btn-block">حفظ الإعدادات</button>
+
         </form>
     </div>
-    
+
     <div style="text-align: center; margin-top: 20px;">
-        <a href="{{ url_for('dashboard') }}" class="btn-back">
-            &larr; رجوع للوحة التحكم
-        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn-back">رجوع للوحة التحكم</a>
     </div>
 
 {% endblock %}

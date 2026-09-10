@@ -2,117 +2,92 @@
 {% block title %}إدارة الطلاب{% endblock %}
 
 {% block content %}
-    <h1>إدارة بيانات الطلاب</h1>
-    <p>هنا يمكنك عرض وتعديل بيانات كل الطلاب المسجلين.</p>
-    <hr>
+    <h1 class="page-title">إدارة بيانات الطلاب</h1>
+    <p class="page-subtitle">عرض وتعديل بيانات كل الطلاب المسجلين.</p>
 
-    {# ─── قسم استيراد Excel ─── #}
-    <div style="background:#fff8e1; border:1px solid #ffc107; border-radius:10px; padding:18px 22px; margin-bottom:24px;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-            <span style="font-size:22px;">📥</span>
-            <strong style="font-size:16px;">استيراد طلاب من ملف Excel</strong>
-        </div>
+    <div class="panel" style="border-right: 4px solid var(--gold);">
+        <h3 style="margin-bottom:6px;">استيراد طلاب من ملف Excel</h3>
 
-        <p style="font-size:13px; color:#6c757d; margin:0 0 10px;">
+        <p style="font-size: 0.85em; color: var(--muted); margin:0 0 10px;">
             يجب أن يحتوي ملف الـ Excel على الأعمدة التالية بالضبط في الصف الأول (مهما كان ترتيبهم):
         </p>
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
             {% for col in ['name', 'phone', 'college', 'year'] %}
-            <code style="background:#343a40; color:#f8f9fa; padding:3px 10px; border-radius:5px; font-size:13px;">{{ col }}</code>
+            <code style="background: var(--ink); color: var(--surface); padding:3px 10px; border-radius:5px; font-size:0.82em;">{{ col }}</code>
             {% endfor %}
         </div>
-        <p style="font-size:12px; color:#856404; margin:0 0 14px;">
-            ⚠️ الاسم ورقم التليفون <strong>إلزاميان</strong>. الطلاب بنفس رقم التليفون الموجود مسبقاً سيتم تخطيهم تلقائياً.
+        <p style="font-size: 0.8em; color: var(--warning); margin:0 0 14px;">
+            الاسم ورقم التليفون <strong>إلزاميان</strong>. الطلاب بنفس رقم التليفون الموجود مسبقاً سيتم تخطيهم تلقائياً.
         </p>
 
         <form action="{{ url_for('import_students') }}" method="POST" enctype="multipart/form-data"
               style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <input type="file" name="excel_file" accept=".xlsx,.xls" required
-                   style="padding:8px; border:1px solid #ccc; border-radius:6px; font-size:14px; background:white;">
-            <button type="submit"
-                    style="padding:9px 22px; background:#28a745; color:white; border:none; border-radius:6px;
-                           font-size:15px; font-weight:bold; cursor:pointer;">
-                📤 استيراد
-            </button>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="excel_file" accept=".xlsx,.xls" required style="flex:1; min-width:220px;">
+            <button type="submit" class="btn btn-success">استيراد</button>
         </form>
     </div>
 
-    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-        <form method="GET" action="{{ url_for('manage_students') }}">
-            <table style="width: 100%;">
-                <tr>
-                    <td style="width: 70%;">
-                        <input type="text" name="query" 
-                               placeholder="ابحث بالاسم، التليفون، أو الكلية..." 
-                               value="{{ query or '' }}"
-                               style="width: 95%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px;">
-                    </td>
-                    <td style="width: 15%;">
-                        <button type="submit" 
-                                style="font-size: 16px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-                            بحث
-                        </button>
-                    </td>
-                    <td style="width: 15%;">
-                        <a href="{{ url_for('manage_students') }}" 
-                           style="display: block; text-align: center; font-size: 16px; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px;">
-                            عرض الكل
-                        </a>
-                    </td>
-                </tr>
-            </table>
+    <div class="panel">
+        <form method="GET" action="{{ url_for('manage_students') }}" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="flex:1; min-width:220px; margin-bottom:0;">
+                <label for="query">بحث</label>
+                <input type="text" id="query" name="query"
+                       placeholder="ابحث بالاسم، التليفون، أو الكلية..."
+                       value="{{ query or '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary">بحث</button>
+            <a href="{{ url_for('manage_students') }}" class="btn btn-ghost">عرض الكل</a>
         </form>
     </div>
-    
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #f4f4f4;">
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الاسم</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">رقم التليفون</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الكلية</th>
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">الفرقة</th> 
-                <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">إجراءات</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if students %}
-                {% for student in students %}
+
+    <div class="table-wrap">
+        <table class="ledger">
+            <thead>
                 <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ student.name }}</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ student.phone }}</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ student.college or 'غير محدد' }}</td>
-                    
-                    <td style="padding: 10px; border: 1px solid #ddd;">{{ student.year or '-' }}</td>
-                    
-                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
-                        <div style="display: flex; gap: 8px; justify-content: center;">
-                            <a href="{{ url_for('edit_student', student_id=student.student_id) }}" 
-                               style="padding: 5px 15px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">
-                                تعديل ✏️
-                            </a>
-                            <form action="{{ url_for('delete_student', student_id=student.student_id) }}" method="POST" style="margin: 0;">
-                                <button type="submit" 
-                                        onclick="return confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟');"
-                                        style="padding: 5px 15px; background-color: #dc3545; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">
-                                    حذف 🗑️
-                                </button>
-                            </form>
-                        </div>
-                    </td>
+                    <th>الاسم</th>
+                    <th>رقم التليفون</th>
+                    <th>الكلية</th>
+                    <th>الفرقة</th>
+                    <th style="text-align:center;">إجراءات</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="5" style="padding: 20px; border: 1px solid #ddd; text-align: center;">
-                        لا يوجد طلاب مطابقون لنتيجة البحث.
-                    </td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-    
-    <a href="javascript:history.back()" class="btn-back" style="margin-top: 20px;">
-        &larr; رجوع
-    </a>
+            </thead>
+            <tbody>
+                {% if students %}
+                    {% for student in students %}
+                    <tr>
+                        <td>{{ student.name }}</td>
+                        <td class="num">{{ student.phone }}</td>
+                        <td>{{ student.college or 'غير محدد' }}</td>
+                        <td>{{ student.year or '-' }}</td>
+                        <td>
+                            <div style="display: flex; gap: 8px; justify-content: center;">
+                                <a href="{{ url_for('edit_student', student_id=student.student_id) }}" class="btn btn-accent btn-sm">تعديل</a>
+                                {% if session.get('role') == 'manager' %}
+                                <form action="{{ url_for('delete_student', student_id=student.student_id) }}" method="POST" style="margin: 0;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit"
+                                            onclick="return confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟');"
+                                            class="btn btn-outline-danger btn-sm">
+                                        حذف
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--muted);">
+                            لا يوجد طلاب مطابقون لنتيجة البحث.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="javascript:history.back()" class="btn-back">رجوع</a>
 
 {% endblock %}
