@@ -123,16 +123,23 @@ def room_has_open_visit(c, room_id):
 # =========================================================
 # 🔧 ترقية قاعدة البيانات (إضافة أعمدة ناقصة لقواعد البيانات القديمة)
 # =========================================================
+def _ensure_column(c, table, column, ddl):
+    c.execute(f"PRAGMA table_info({table})")
+    columns = [row['name'] for row in c.fetchall()]
+    if column not in columns:
+        c.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
 def run_startup_migrations():
     if not os.path.exists(DATABASE):
         return
     conn = get_db()
     c = conn.cursor()
-    c.execute("PRAGMA table_info(Coupons)")
-    columns = [row['name'] for row in c.fetchall()]
-    if 'visit_id' not in columns:
-        c.execute("ALTER TABLE Coupons ADD COLUMN visit_id INTEGER REFERENCES Visits(visit_id)")
-        conn.commit()
+
+    # أعمدة اتضافت بمرور الوقت لبعض قواعد البيانات القديمة (عبر سكربتات منفصلة)
+    # ومش موجودة أساساً في كل نسخة من workspace.db - بنضمن وجودها دايماً هنا
+    _ensure_column(c, 'Coupons', 'visit_id', 'visit_id INTEGER REFERENCES Visits(visit_id)')
+    _ensure_column(c, 'Visits', 'manual_discount', 'manual_discount REAL DEFAULT 0')
+    _ensure_column(c, 'Students', 'year', 'year TEXT')
 
     # جدول الإعدادات (حد كروت النت المجانية + أسعار الشرائح) - لازم يكون موجود
     # دايماً، حتى لو الداتا بيز اتعملت قبل ما الجدول ده يتضاف للسكيما الرئيسية
@@ -143,8 +150,8 @@ def run_startup_migrations():
         )
     """)
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
-    conn.commit()
 
+    conn.commit()
     conn.close()
 
 run_startup_migrations()

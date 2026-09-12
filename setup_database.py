@@ -143,7 +143,8 @@ def create_database():
         total_discount REAL DEFAULT 0,
         payment_method TEXT DEFAULT 'cash', -- (تعديل: طريقة الدفع)
         reservation_id INTEGER,             -- (تعديل: ربط بالحجز)
-        
+        manual_discount REAL DEFAULT 0,     -- (تعديل: قيمة الخصم اليدوي منفصلة)
+
         FOREIGN KEY(student_id) REFERENCES Students(student_id),
         FOREIGN KEY(user_id) REFERENCES Users(user_id),
         FOREIGN KEY(shift_id) REFERENCES Shifts(shift_id),
