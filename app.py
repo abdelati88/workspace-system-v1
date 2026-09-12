@@ -133,6 +133,18 @@ def run_startup_migrations():
     if 'visit_id' not in columns:
         c.execute("ALTER TABLE Coupons ADD COLUMN visit_id INTEGER REFERENCES Visits(visit_id)")
         conn.commit()
+
+    # جدول الإعدادات (حد كروت النت المجانية + أسعار الشرائح) - لازم يكون موجود
+    # دايماً، حتى لو الداتا بيز اتعملت قبل ما الجدول ده يتضاف للسكيما الرئيسية
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT
+        )
+    """)
+    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
+    conn.commit()
+
     conn.close()
 
 run_startup_migrations()

@@ -251,6 +251,15 @@ def create_database():
     );
     """)
 
+    # 15. Settings (إعدادات النظام: حد كروت النت المجانية + أسعار الشرائح)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS Settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT
+    );
+    """)
+    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
+
     print("🎉 تم إنشاء هيكل قاعدة البيانات بالكامل (شامل جميع التحديثات)!")
     conn.commit()
     conn.close()
