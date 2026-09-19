@@ -154,6 +154,50 @@ def run_startup_migrations():
     conn.commit()
     conn.close()
 
+# =========================================================
+# 🆕 أول تشغيل على جهاز جديد: إنشاء الداتا بيز وحساب المدير تلقائياً
+# =========================================================
+def bootstrap_fresh_database():
+    import setup_database
+
+    needs_schema = True
+    if os.path.exists(DATABASE):
+        probe = sqlite3.connect(DATABASE)
+        try:
+            row = probe.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'"
+            ).fetchone()
+            needs_schema = row is None
+        finally:
+            probe.close()
+
+    if needs_schema:
+        setup_database.create_database()
+
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM Users")
+    if c.fetchone()[0] == 0:
+        alphabet = string.ascii_letters + string.digits
+        password = ''.join(secrets.choice(alphabet) for _ in range(10))
+        c.execute("INSERT INTO Users (username, password, role) VALUES (?, ?, 'manager')",
+                  ('admin', generate_password_hash(password, method='pbkdf2:sha256')))
+        conn.commit()
+
+        note = (f"اسم المستخدم: admin\nكلمة المرور: {password}\n"
+                "سجّل الدخول بيها وأضف حسابات الموظفين من (إدارة المستخدمين)، وبعدها امسح الملف ده.\n")
+        try:
+            with open(os.path.join(BASE_DIR, 'initial_admin_password.txt'), 'w', encoding='utf-8') as f:
+                f.write(note)
+        except OSError:
+            pass
+        print("=" * 50)
+        print(">>> FIRST RUN: admin account created")
+        print(f">>> username: admin    password: {password}")
+        print("=" * 50)
+    conn.close()
+
+bootstrap_fresh_database()
 run_startup_migrations()
 
 # ... (كمل باقي الكود زي ما هو من غير تغيير) ...
