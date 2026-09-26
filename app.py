@@ -1414,7 +1414,7 @@ def add_sale(visit_id):
         flash(f"تم تسجيل مبيعات بقيمة {total} ج", "success")
         return redirect(url_for('dashboard'))
 
-    c.execute("SELECT * FROM Products ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
     prods = c.fetchall()
     conn.close()
     return render_template('add_sale.html', products=prods, student_name=student_name, visit_id=visit_id)
@@ -1471,7 +1471,7 @@ def log_expense():
         
     # في حالة الـ GET (فتح الصفحة)
     # لازم نبعت قائمة المنتجات عشان الجدول يظهر
-    c.execute("SELECT * FROM Products ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
     prods = c.fetchall()
     conn.close()
     
@@ -1970,7 +1970,7 @@ def manage_products():
         c.execute("INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
                   (request.form['name'], float(request.form['purchase_price']), float(request.form['sale_price']), float(request.form['stock_quantity'])))
         conn.commit()
-    c.execute("SELECT * FROM Products ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
     prods = c.fetchall()
     conn.close()
     return render_template('manage_products.html', products=prods)
