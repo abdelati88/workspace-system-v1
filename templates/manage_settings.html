@@ -33,6 +33,18 @@
                        style="text-align: center; font-size: 18px; padding: 15px;">
             </div>
 
+            <h3 style="margin-top: 30px; color: var(--blue);">⏱️ سماحية الوقت بعد كل باقة</h3>
+            <div class="form-group">
+                <label for="tier_grace_minutes">عدد الدقايق المسموحة بعد كل باقة قبل ما تتحسب على الباقة اللي بعدها:</label>
+                <p style="color: var(--muted); font-size: 0.9em; margin-top: 5px;">
+                    مثال: لو كتبت <strong>15</strong>، الطالب اللي قعد ساعة و10 دقايق لسه بيتحاسب بسعر الساعة، مش سعر الـ3 ساعات.
+                </p>
+                <input type="number" id="tier_grace_minutes" name="tier_grace_minutes"
+                       value="{{ tier_grace_minutes }}"
+                       min="0" step="1" required
+                       style="text-align: center; font-size: 18px; padding: 15px;">
+            </div>
+
             <!-- أسعار شرائح الغرف المشتركة/الصامتة -->
             <h3 style="margin-top: 30px; color: var(--blue);">💰 أسعار شرائح الغرف المشتركة/الصامتة</h3>
             <div class="form-group">

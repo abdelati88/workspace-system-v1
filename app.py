@@ -151,6 +151,7 @@ def run_startup_migrations():
     """)
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', '15')")
+    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('tier_grace_minutes', '15')")
 
     conn.commit()
     conn.close()
@@ -240,11 +241,15 @@ def calculate_dynamic_cost(hours, room_name, hourly_rate):
             row = c.fetchone()
             if row:
                 tier_prices[key] = float(row['setting_value'])
+
+        # سماحية الدقايق بعد كل باقة قبل ما يقفز للباقة اللي بعدها - قابلة للتعديل من إعدادات النظام
+        c.execute("SELECT setting_value FROM Settings WHERE setting_key='tier_grace_minutes'")
+        row = c.fetchone()
+        grace_minutes = float(row['setting_value']) if row else 15.0
         conn.close()
 
-        # ترتيب الشرائح: (الحد الأقصى للساعات بسماحية 3 دقايق, مفتاح السعر)
-        # سماحية 15 دقيقة (0.25 ساعة) بعد كل باقة قبل ما يقفز للباقة اللي بعدها
-        GRACE_PERIOD = 0.25
+        # ترتيب الشرائح: (الحد الأقصى للساعات بعد إضافة السماحية, مفتاح السعر)
+        GRACE_PERIOD = grace_minutes / 60.0
         TIERS = [
             (1  + GRACE_PERIOD, 'tier_price_1h'),
             (3  + GRACE_PERIOD, 'tier_price_3h'),
@@ -1594,6 +1599,10 @@ def manage_settings():
         new_cap = request.form.get('employee_discount_cap', '15')
         c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', ?)", (new_cap,))
 
+        # --- حفظ سماحية الدقايق بعد كل باقة قبل القفز للباقة اللي بعدها ---
+        new_grace = request.form.get('tier_grace_minutes', '15')
+        c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('tier_grace_minutes', ?)", (new_grace,))
+
         # --- حفظ أسعار الشرائح ---
         for key in TIER_KEYS:
             value = request.form.get(key)
@@ -1614,6 +1623,11 @@ def manage_settings():
     row = c.fetchone()
     employee_discount_cap = float(row['setting_value']) if row else 15.0
 
+    # سماحية الدقايق بعد كل باقة
+    c.execute("SELECT setting_value FROM Settings WHERE setting_key='tier_grace_minutes'")
+    row = c.fetchone()
+    tier_grace_minutes = float(row['setting_value']) if row else 15.0
+
     # أسعار الشرائح
     tier_prices = {}
     for key, default in TIER_KEYS.items():
@@ -1623,7 +1637,8 @@ def manage_settings():
 
     conn.close()
     return render_template('manage_settings.html', current_limit=current_limit,
-                           employee_discount_cap=employee_discount_cap, tier_prices=tier_prices)
+                           employee_discount_cap=employee_discount_cap,
+                           tier_grace_minutes=tier_grace_minutes, tier_prices=tier_prices)
 
 @app.route("/manage_students")
 def manage_students():

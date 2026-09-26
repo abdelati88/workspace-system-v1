@@ -261,6 +261,7 @@ def create_database():
     """)
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', '15')")
+    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('tier_grace_minutes', '15')")
 
     print("🎉 تم إنشاء هيكل قاعدة البيانات بالكامل (شامل جميع التحديثات)!")
     conn.commit()
