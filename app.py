@@ -150,6 +150,7 @@ def run_startup_migrations():
         )
     """)
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
+    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', '15')")
 
     conn.commit()
     conn.close()
@@ -242,13 +243,15 @@ def calculate_dynamic_cost(hours, room_name, hourly_rate):
         conn.close()
 
         # ترتيب الشرائح: (الحد الأقصى للساعات بسماحية 3 دقايق, مفتاح السعر)
+        # سماحية 15 دقيقة (0.25 ساعة) بعد كل باقة قبل ما يقفز للباقة اللي بعدها
+        GRACE_PERIOD = 0.25
         TIERS = [
-            (1.05,  'tier_price_1h'),
-            (3.05,  'tier_price_3h'),
-            (6.05,  'tier_price_6h'),
-            (9.05,  'tier_price_9h'),
-            (12.05, 'tier_price_12h'),
-            (16.05, 'tier_price_16h'),
+            (1  + GRACE_PERIOD, 'tier_price_1h'),
+            (3  + GRACE_PERIOD, 'tier_price_3h'),
+            (6  + GRACE_PERIOD, 'tier_price_6h'),
+            (9  + GRACE_PERIOD, 'tier_price_9h'),
+            (12 + GRACE_PERIOD, 'tier_price_12h'),
+            (16 + GRACE_PERIOD, 'tier_price_16h'),
         ]
 
         for limit, key in TIERS:
@@ -878,7 +881,14 @@ def show_invoice(visit_id):
         else: # fixed
             manual_discount_amount = manual_disc_value
         manual_discount_amount = min(manual_discount_amount, time_cost) # لا يتجاوز تكلفة الوقت
-        
+
+        # الموظف (غير المدير) محدود بسقف الخصم من الإعدادات؛ نفس السقف المطبق فعلياً عند الدفع
+        if session.get('role') != 'manager':
+            c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
+            cap_row_preview = c.fetchone()
+            cap_preview = float(cap_row_preview['setting_value']) if cap_row_preview else 15.0
+            manual_discount_amount = min(manual_discount_amount, cap_preview)
+
     # هنا هنمرر المبلغ النهائي المحسوب وليس القيمة الأصلية
     # عشان نعرف نعرضه صح في الفاتورة لو طلب نسبة
     manual_discount_display = manual_discount_amount
@@ -911,6 +921,10 @@ def show_invoice(visit_id):
                 discount_info = {"code": cp['code'], "amount": min(disc_val, time_cost)}
                 flash("تم تطبيق الكوبون", "success")
 
+    c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
+    cap_row = c.fetchone()
+    employee_discount_cap = float(cap_row['setting_value']) if cap_row else 15.0
+
     conn.close()
     
     # د. الجمع النهائي للخصومات (كوبون + يدوي)
@@ -942,7 +956,8 @@ def show_invoice(visit_id):
                            # تمرير نوع وقيمة الخصم اليدوي الأصلية للعرض في الفورم لو كان موجود
                            manual_disc_type=manual_disc_type,
                            manual_disc_value=manual_disc_value,
-                           active_sub=active_sub)
+                           active_sub=active_sub,
+                           employee_discount_cap=employee_discount_cap)
 @app.route("/apply_coupon/<int:visit_id>", methods=['POST'])
 def apply_coupon(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -977,10 +992,16 @@ def confirm_payment(visit_id):
         manual_disc_value = float(request.form.get('manual_disc_value', 0))
     except ValueError:
         manual_disc_value = 0
-    # الخصم الخاص صلاحية مدير فقط، حتى لو اتبعتت قيمة في الطلب من غير المدير
-    if session.get('role') != 'manager':
-        manual_disc_value = 0
     manual_disc_value = max(0, manual_disc_value)
+    # سقف الخصم الخاص للموظف (غير المدير) - بييجي من الإعدادات، والمدير من غير سقف
+    employee_discount_cap = None
+    if session.get('role') != 'manager':
+        settings_conn = get_db()
+        settings_row = settings_conn.execute(
+            "SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'"
+        ).fetchone()
+        settings_conn.close()
+        employee_discount_cap = float(settings_row['setting_value']) if settings_row else 15.0
 
     conn = get_db()
     c = conn.cursor()
@@ -1059,6 +1080,9 @@ def confirm_payment(visit_id):
             else:
                 manual_disc = manual_disc_value
             manual_disc = min(manual_disc, remaining_for_manual)
+            # الموظف (غير المدير) محدود بسقف الخصم من الإعدادات؛ المدير بلا سقف
+            if employee_discount_cap is not None:
+                manual_disc = min(manual_disc, employee_discount_cap)
         else:
             manual_disc = 0
         final_discount += manual_disc
@@ -1566,6 +1590,10 @@ def manage_settings():
         new_limit = request.form.get('internet_free_limit', '2')
         c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', ?)", (new_limit,))
 
+        # --- حفظ سقف الخصم الخاص اللي يقدر الموظف (غير المدير) يعمله من غير رجوع للمدير ---
+        new_cap = request.form.get('employee_discount_cap', '15')
+        c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', ?)", (new_cap,))
+
         # --- حفظ أسعار الشرائح ---
         for key in TIER_KEYS:
             value = request.form.get(key)
@@ -1581,6 +1609,11 @@ def manage_settings():
     row = c.fetchone()
     current_limit = int(row['setting_value']) if row else 2
 
+    # سقف الخصم الخاص للموظف
+    c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
+    row = c.fetchone()
+    employee_discount_cap = float(row['setting_value']) if row else 15.0
+
     # أسعار الشرائح
     tier_prices = {}
     for key, default in TIER_KEYS.items():
@@ -1589,7 +1622,8 @@ def manage_settings():
         tier_prices[key] = float(row['setting_value']) if row else default
 
     conn.close()
-    return render_template('manage_settings.html', current_limit=current_limit, tier_prices=tier_prices)
+    return render_template('manage_settings.html', current_limit=current_limit,
+                           employee_discount_cap=employee_discount_cap, tier_prices=tier_prices)
 
 @app.route("/manage_students")
 def manage_students():
@@ -1880,9 +1914,7 @@ def clean_duplicates():
 # (3) دالة استقبال الخصم اليدوي
 @app.route("/apply_manual_discount/<int:visit_id>", methods=['POST'])
 def apply_manual_discount(visit_id):
-    if session.get('role') != 'manager':
-        flash("الخصم الخاص متاح للمدير فقط.", "error")
-        return redirect(url_for('show_invoice', visit_id=visit_id))
+    if 'user_id' not in session: return redirect(url_for('login'))
 
     # بناخد النوع (نسبة ولا مبلغ) والقيمة
     m_type = request.form.get('manual_type', 'fixed')

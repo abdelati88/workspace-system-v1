@@ -113,11 +113,14 @@
             </form>
         </div>
 
-        {% if session.get('role') == 'manager' %}
         <div class="panel" style="border-right: 4px solid var(--gold);">
             <form action="{{ url_for('apply_manual_discount', visit_id=visit_details.visit_id) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <label>تطبيق خصم خاص (مجاملة) - صلاحية المدير</label>
+                {% if session.get('role') == 'manager' %}
+                    <label>تطبيق خصم خاص (مجاملة) - بلا حد أقصى</label>
+                {% else %}
+                    <label>تطبيق خصم خاص (مجاملة) - حتى {{ "%.0f"|format(employee_discount_cap) }} جنيه</label>
+                {% endif %}
 
                 <div style="display: flex; gap: 10px; margin-top: 5px; flex-wrap:wrap;">
                     <select name="manual_type" style="flex: 1; min-width:130px;">
@@ -135,7 +138,6 @@
                 <small style="color: var(--muted); display:block; margin-top:8px;">اضغط "تطبيق" لرؤية السعر الجديد فقط (لن يتم غلق الفاتورة).</small>
             </form>
         </div>
-        {% endif %}
 
         <div class="panel" style="background: var(--ink); color: var(--surface); text-align: center; border-color: var(--ink);">
             <p style="color: rgba(251,248,242,0.75); margin:0;">الإجمالي قبل الخصم: {{ "%.2f"|format(visit_details.grand_total) }} جنيه</p>

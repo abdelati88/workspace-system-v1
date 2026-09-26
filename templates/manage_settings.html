@@ -21,6 +21,18 @@
                        style="text-align: center; font-size: 18px; padding: 15px;">
             </div>
 
+            <h3 style="margin-top: 30px; color: var(--blue);">🎁 سقف الخصم الخاص للموظف</h3>
+            <div class="form-group">
+                <label for="employee_discount_cap">أقصى مبلغ (جنيه) يقدر الموظف (غير المدير) يخصمه بنفسه من غير رجوع للمدير:</label>
+                <p style="color: var(--muted); font-size: 0.9em; margin-top: 5px;">
+                    مفيد لحالات زي "قعد ساعة وشوية دقايق" فوق سماحية الباقة. المدير نفسه مش محدود بسقف.
+                </p>
+                <input type="number" id="employee_discount_cap" name="employee_discount_cap"
+                       value="{{ employee_discount_cap }}"
+                       min="0" step="0.5" required
+                       style="text-align: center; font-size: 18px; padding: 15px;">
+            </div>
+
             <!-- أسعار شرائح الغرف المشتركة/الصامتة -->
             <h3 style="margin-top: 30px; color: var(--blue);">💰 أسعار شرائح الغرف المشتركة/الصامتة</h3>
             <div class="form-group">
