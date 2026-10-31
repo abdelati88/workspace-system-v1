@@ -151,9 +151,11 @@
                                     </button>
                                 </form>
 
-                                <a href="{{ url_for('cancel_reservation', res_id=res.reservation_id) }}"
-                                   onclick="return confirm('إلغاء الحجز؟')"
-                                   class="btn btn-outline-danger btn-sm" style="margin-right: 8px;">❌ إلغاء</a>
+                                <form action="{{ url_for('cancel_reservation', res_id=res.reservation_id) }}" method="POST" style="display:inline;"
+                                      onsubmit="return confirm('إلغاء الحجز؟')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" style="margin-right: 8px;">❌ إلغاء</button>
+                                </form>
                             {% else %}
                                 <span style="color: var(--muted);">الزيارة جارية...</span>
                             {% endif %}

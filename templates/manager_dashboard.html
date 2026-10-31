@@ -51,9 +51,9 @@
 
     <div class="panel" style="border: 1px solid var(--danger); margin-top:30px;">
         <h3 style="color: var(--danger);">منطقة تصفير البيانات</h3>
-        <p>هذا الزر يمسح <strong>الطلاب، المبيعات، الحجوزات، والشيفتات</strong> نهائياً.<br>
-        (لن يتم مسح حسابات الموظفين أو المدير، وستظل مسجل الدخول).</p>
-        <form action="{{ url_for('reset_data_keep_users') }}" method="POST" onsubmit="return confirm('هل أنت متأكد؟ سيتم مسح جميع التعاملات والطلاب والبدء من جديد!');">
+        <p>هذا الزر يمسح <strong>الشيفتات، الزيارات، المبيعات، المصروفات، الحجوزات، الكوبونات، اشتراكات الطلاب، والاستعارات</strong> نهائياً.<br>
+        (يتم الاحتفاظ بالمستخدمين والطلاب والمنتجات والغرف والكتب وأنواع الباقات والإعدادات، وستظل مسجل الدخول).</p>
+        <form action="{{ url_for('reset_data_keep_users') }}" method="POST" onsubmit="return confirm('هل أنت متأكد؟ سيتم مسح جميع التعاملات والبدء من جديد!');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline-danger">تصفير البيانات (مع الاحتفاظ بالمستخدمين)</button>
         </form>

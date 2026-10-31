@@ -103,6 +103,9 @@
         <div class="panel">
             <form action="{{ url_for('apply_coupon', visit_id=visit_details.visit_id) }}" method="POST" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {# نحتفظ بالخصم اليدوي المطبق عشان مايضيعش لما نطبق الكوبون #}
+                <input type="hidden" name="m_type" value="{{ manual_disc_type or 'fixed' }}">
+                <input type="hidden" name="m_value" value="{{ manual_disc_value or 0 }}">
                 <div class="form-group" style="flex:1; min-width:220px; margin-bottom:0;">
                     <label for="coupon_code">عندك كود خصم؟</label>
                     <input type="text" id="coupon_code" name="coupon_code"
@@ -116,6 +119,8 @@
         <div class="panel" style="border-right: 4px solid var(--gold);">
             <form action="{{ url_for('apply_manual_discount', visit_id=visit_details.visit_id) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {# نحتفظ بالكوبون المطبق عشان مايضيعش لما نطبق الخصم اليدوي #}
+                <input type="hidden" name="applied_code" value="{{ discount_info.code or '' }}">
                 {% if session.get('role') == 'manager' %}
                     <label>تطبيق خصم خاص (مجاملة) - بلا حد أقصى</label>
                 {% else %}

@@ -84,6 +84,19 @@ def check_csrf_token():
             return redirect(request.referrer or url_for('dashboard'))
 
 # =========================================================
+# ⚠️ إدخال غلط (حروف في خانة رقم، تاريخ بصيغة غلط...) بدل صفحة Error
+# أي حاجة ماتعملهاش commit قبل الخطأ مابتتحفظش، فالداتا مابتتأثرش
+# =========================================================
+@app.errorhandler(ValueError)
+def handle_bad_input(e):
+    app.logger.exception("Invalid input on %s", request.path)
+    flash("⚠️ قيمة غير صحيحة في أحد الحقول (أرقام أو تاريخ). راجع البيانات وحاول مرة أخرى.", "error")
+    target = request.referrer
+    if not target or target.rstrip('/') == request.url.rstrip('/'):
+        target = url_for('dashboard')
+    return redirect(target)
+
+# =========================================================
 # 🔒 منع محاولات تخمين كلمة المرور (Brute-force lockout)
 # =========================================================
 _LOGIN_ATTEMPTS = {}
@@ -121,6 +134,65 @@ def room_has_open_visit(c, room_id):
     return c.fetchone() is not None
 
 # =========================================================
+# 🧾 الوردية المفتوحة للمستخدم الحالي (من السيشن، أو من الداتا بيز لو السيشن نسيها)
+# =========================================================
+def get_open_shift_id(c):
+    c.execute("SELECT shift_id FROM Shifts WHERE user_id = ? AND end_time IS NULL",
+              (session.get('user_id'),))
+    row = c.fetchone()
+    if row:
+        session['active_shift_id'] = row['shift_id']
+        return row['shift_id']
+    session.pop('active_shift_id', None)
+    return None
+
+# الداتا بيز هي المرجع للوردية المفتوحة: بنزامن السيشن معاها في كل طلب، عشان مفيش عملية
+# تتسجل على وردية اتقفلت (مثلاً نفس الموظف فاتح من متصفحين وقفل الوردية من واحد فيهم)
+@app.before_request
+def sync_active_shift():
+    if 'user_id' in session and request.endpoint not in ('static', 'login', 'logout', 'shutdown'):
+        conn = get_db()
+        try:
+            get_open_shift_id(conn.cursor())
+        finally:
+            conn.close()
+
+# =========================================================
+# 📦 منتجات داخلية (مش أصناف كافيتريا) - بتتستخدم بس عشان فلوسها تتسجل في Sales وتتحسب في الوردية
+# =========================================================
+SUBSCRIPTION_PRODUCT = 'اشتراك باقة'
+BOOK_DEPOSIT_PRODUCT = 'تأمين كتاب'
+
+def get_internal_product_id(c, name):
+    c.execute("SELECT product_id FROM Products WHERE name = ?", (name,))
+    row = c.fetchone()
+    if row:
+        return row['product_id']
+    c.execute("INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
+              (name, 0.0, 0.0, 0))
+    return c.lastrowid
+
+# =========================================================
+# 🧮 تعديل مبيعات وردية مقفولة (المدير بيعدل/يمسح صنف بعد القفل)
+# الوردية المفتوحة مش محتاجة حاجة: قفل الوردية بيعيد حساب كل حاجة من الجداول.
+# الوردية المقفولة أرقامها متخزنة، فلازم الصافي يتعدل بنفس الفرق مع المبيعات.
+# =========================================================
+def adjust_closed_shift_sales(c, shift_id, amount):
+    c.execute("""UPDATE Shifts SET revenue_sales = revenue_sales + ?, net_cash = net_cash + ?
+                 WHERE shift_id = ? AND end_time IS NOT NULL""", (amount, amount, shift_id))
+
+# =========================================================
+# 📱 رقم واتساب دولي (مصر): 01012345678 → 201012345678
+# =========================================================
+def to_whatsapp_number(phone):
+    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+    if digits.startswith('20'):
+        return digits
+    if digits.startswith('0'):
+        digits = digits[1:]
+    return '20' + digits
+
+# =========================================================
 # 🔧 ترقية قاعدة البيانات (إضافة أعمدة ناقصة لقواعد البيانات القديمة)
 # =========================================================
 def _ensure_column(c, table, column, ddl):
@@ -140,6 +212,7 @@ def run_startup_migrations():
     _ensure_column(c, 'Coupons', 'visit_id', 'visit_id INTEGER REFERENCES Visits(visit_id)')
     _ensure_column(c, 'Visits', 'manual_discount', 'manual_discount REAL DEFAULT 0')
     _ensure_column(c, 'Students', 'year', 'year TEXT')
+    _ensure_column(c, 'Visits', 'reservation_id', 'reservation_id INTEGER REFERENCES Reservations(reservation_id)')
 
     # جدول الإعدادات (حد كروت النت المجانية + أسعار الشرائح) - لازم يكون موجود
     # دايماً، حتى لو الداتا بيز اتعملت قبل ما الجدول ده يتضاف للسكيما الرئيسية
@@ -428,8 +501,8 @@ def dashboard():
     notify_alert = None
     notify_link = None
     
-    current_time = datetime.datetime.now()
-    one_hour_later = current_time + datetime.timedelta(hours=1)
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    one_hour_later = (datetime.datetime.now() + datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     
     # هات الحجز القريب
     c.execute("""
@@ -452,8 +525,8 @@ def dashboard():
         
         encoded_alert = urllib.parse.quote(msg)
         
-        # (ب) استخدام رقم العميل المسجل في الحجز (مع إضافة كود مصر 20)
-        client_phone = "20" + str(near_res['phone'])
+        # (ب) استخدام رقم العميل المسجل في الحجز (بصيغة دولية: كود مصر 20 بدل الصفر)
+        client_phone = to_whatsapp_number(near_res['phone'])
         
         # تجهيز الرابط للعميل
         notify_link = f"https://web.whatsapp.com/send?phone={client_phone}&text={encoded_alert}"
@@ -536,7 +609,7 @@ def start_shift():
     conn.close()
     return redirect(url_for('dashboard'))
 
-@app.route("/end_shift", methods=['GET', 'POST'])
+@app.route("/end_shift", methods=['POST'])
 def end_shift():
     if 'active_shift_id' not in session: return redirect(url_for('dashboard'))
     shift_id = session.get('active_shift_id')
@@ -902,7 +975,8 @@ def show_invoice(visit_id):
     # ب. التحقق من خصم الحجز المسبق (أولوية)
     
     # ب. التحقق من خصم الحجز المسبق (أولوية)
-    if 'reservation_id' in visit_data and visit_data['reservation_id']:
+    # ملاحظة: الـ "in" على sqlite3.Row بتدور في القيم مش أسماء الأعمدة، فلازم نقرأ العمود مباشرة
+    if visit_data['reservation_id']:
         c.execute("SELECT * FROM Reservations WHERE reservation_id=?", (visit_data['reservation_id'],))
         res_data = c.fetchone()
         if res_data and res_data['discount_type'] != 'none':
@@ -933,6 +1007,8 @@ def show_invoice(visit_id):
     conn.close()
     
     # د. الجمع النهائي للخصومات (كوبون + يدوي)
+    # نفس قاعدة الدفع الفعلي: اليدوي مايعديش الباقي من تكلفة الوقت بعد الحجز/الكوبون
+    manual_discount_amount = min(manual_discount_amount, max(0, time_cost - discount_info['amount']))
     total_discount = discount_info['amount'] + manual_discount_amount
     
     grand_total_before = time_cost + sales_total
@@ -983,7 +1059,9 @@ def apply_coupon(visit_id):
 
     conn.close()
     if error: flash(error, "error")
-    return redirect(url_for('show_invoice', visit_id=visit_id, applied_code=code, error_message=error))
+    # بنرجّع الخصم اليدوي اللي كان مطبق كمان، عشان الخصمين يتجمعوا
+    return redirect(url_for('show_invoice', visit_id=visit_id, applied_code=code, error_message=error,
+                            m_type=request.form.get('m_type', 'fixed'), m_value=request.form.get('m_value', 0)))
 
 @app.route("/confirm_payment/<int:visit_id>", methods=['POST'])
 def confirm_payment(visit_id):
@@ -1018,7 +1096,20 @@ def confirm_payment(visit_id):
     visit = c.fetchone()
     
     if not visit: return redirect(url_for('dashboard'))
-    
+
+    # منع التحصيل مرتين لنفس الزيارة (مثلاً ضغطة مزدوجة على زر الدفع)
+    if visit['check_out_time']:
+        conn.close()
+        flash("هذه الزيارة تم تحصيلها بالفعل.", "error")
+        return redirect(url_for('dashboard'))
+
+    # التحصيل لازم يتسجل على وردية مفتوحة، وإلا الفلوس تروح على وردية قديمة (ممكن تكون اتقفلت)
+    current_shift_id = get_open_shift_id(c)
+    if not current_shift_id:
+        conn.close()
+        flash("يجب فتح وردية أولاً قبل تحصيل الفاتورة.", "error")
+        return redirect(url_for('show_invoice', visit_id=visit_id))
+
     c.execute("SELECT name FROM Students WHERE student_id=?", (visit['student_id'],))
     student_name = c.fetchone()['name']
 
@@ -1053,7 +1144,7 @@ def confirm_payment(visit_id):
     # 2. لو كاش (نحسب الخصومات)
     if payment_method == 'cash':
         # أ. خصم الحجز (Reservation)
-        if 'reservation_id' in visit and visit['reservation_id']:
+        if visit['reservation_id']:
              c.execute("SELECT * FROM Reservations WHERE reservation_id=?", (visit['reservation_id'],))
              res_data = c.fetchone()
              if res_data and res_data['discount_type'] != 'none':
@@ -1067,7 +1158,9 @@ def confirm_payment(visit_id):
         elif coupon_code:
             c.execute("SELECT * FROM Coupons WHERE code=?", (coupon_code,))
             cp = c.fetchone()
-            if cp and not cp['is_used'] and (not cp['student_id'] or cp['student_id'] == visit['student_id']):
+            cp_expired = bool(cp and cp['expiry_date'] and
+                              datetime.datetime.strptime(cp['expiry_date'], '%Y-%m-%d').date() < out_time.date())
+            if cp and not cp['is_used'] and not cp_expired and (not cp['student_id'] or cp['student_id'] == visit['student_id']):
                 coupon_id_save = cp['coupon_id']
                 if cp['discount_type'] == 'percentage':
                     disc = final_time_cost * (cp['discount_value'] / 100.0)
@@ -1095,18 +1188,22 @@ def confirm_payment(visit_id):
     else:
         manual_disc = 0
 
-    # تحديث الوردية
-    current_shift_id = session.get('active_shift_id')
-    shift_update = current_shift_id if current_shift_id else visit['shift_id']
-
     # الحفظ النهائي (لاحظ إضافة manual_discount للقائمة)
-    c.execute("""UPDATE Visits SET 
-                 check_out_time=?, duration_hours=?, total_cost=?, 
-                 total_discount=?, manual_discount=?, coupon_id=?, payment_method=?, shift_id=? 
+    c.execute("""UPDATE Visits SET
+                 check_out_time=?, duration_hours=?, total_cost=?,
+                 total_discount=?, manual_discount=?, coupon_id=?, payment_method=?, shift_id=?
                  WHERE visit_id=?""",
-              (out_time.strftime("%Y-%m-%d %H:%M:%S"), duration, final_time_cost, 
-               final_discount, manual_disc, coupon_id_save, payment_method, shift_update, visit_id))
-    
+              (out_time.strftime("%Y-%m-%d %H:%M:%S"), duration, final_time_cost,
+               final_discount, manual_disc, coupon_id_save, payment_method, current_shift_id, visit_id))
+
+    # مشتريات الزيارة بتتدفع مع الفاتورة، فلازم تتحسب على الوردية اللي اتحصلت فيها.
+    # من غيرها: لو الزيارة بدأت في وردية واتقفلت في اللي بعدها، المشتريات مكانتش بتظهر في أي وردية.
+    c.execute("UPDATE Sales SET shift_id=? WHERE visit_id=?", (current_shift_id, visit_id))
+
+    # الحجز اللي اتحولت منه الزيارة خلص خلاص
+    if visit['reservation_id']:
+        c.execute("UPDATE Reservations SET status='completed' WHERE reservation_id=?", (visit['reservation_id'],))
+
     conn.commit()
     conn.close()
     flash(f"تم تحصيل الفاتورة للطالب {student_name}", "success")
@@ -1414,7 +1511,7 @@ def add_sale(visit_id):
         flash(f"تم تسجيل مبيعات بقيمة {total} ج", "success")
         return redirect(url_for('dashboard'))
 
-    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name NOT IN (?, ?) ORDER BY name", (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT))
     prods = c.fetchall()
     conn.close()
     return render_template('add_sale.html', products=prods, student_name=student_name, visit_id=visit_id)
@@ -1471,7 +1568,7 @@ def log_expense():
         
     # في حالة الـ GET (فتح الصفحة)
     # لازم نبعت قائمة المنتجات عشان الجدول يظهر
-    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name NOT IN (?, ?) ORDER BY name", (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT))
     prods = c.fetchall()
     conn.close()
     
@@ -1485,6 +1582,13 @@ def delete_product(product_id):
     
     conn = get_db()
     c = conn.cursor()
+    # SQLite مش بيفرض الـ Foreign Keys هنا، فلازم نتأكد بنفسنا: لو المنتج اتباع قبل كده
+    # مسحه هيخفي مبيعاته من ملخص الوردية وتفاصيلها (لأنها بتعمل JOIN على المنتجات)
+    c.execute("SELECT 1 FROM Sales WHERE product_id=? LIMIT 1", (product_id,))
+    if c.fetchone():
+        conn.close()
+        flash("لا يمكن حذف المنتج لأنه مرتبط بعمليات بيع سابقة. يمكنك تعديل الكمية إلى 0 بدلاً من الحذف.", "error")
+        return redirect(url_for('manage_products'))
     try:
         c.execute("DELETE FROM Products WHERE product_id=?", (product_id,))
         conn.commit()
@@ -1554,7 +1658,12 @@ def sell_subscription():
             )
 
             conn.commit()
+            conn.close()
             flash("تم تفعيل الباقة", "success")
+            # لو جاي من فاتورة طالب، نرجعه لنفس الفاتورة عشان يدفع من الباقة على طول
+            visit_id_redirect = request.form.get('visit_id_redirect')
+            if visit_id_redirect and visit_id_redirect.isdigit():
+                return redirect(url_for('show_invoice', visit_id=int(visit_id_redirect)))
             return redirect(url_for('dashboard'))
             
     c.execute("SELECT * FROM MembershipTypes")
@@ -1564,7 +1673,8 @@ def sell_subscription():
         c.execute("SELECT * FROM Students WHERE student_id=?", (pre_sid,))
         studs = c.fetchall()
     conn.close()
-    return render_template('sell_subscription.html', types=types, students=studs)
+    return render_template('sell_subscription.html', types=types, students=studs,
+                           visit_id=request.args.get('visit_id', ''))
 
 # --- الإدارة (المدير) ---
 
@@ -1682,7 +1792,19 @@ def delete_student(student_id):
         conn.close()
         flash("لا يمكن حذف طالب متواجد حالياً في مساحة العمل. قم بإنهاء زيارته أولاً.", "error")
         return redirect(url_for('manage_students'))
-        
+
+    # الطالب اللي ليه تاريخ (زيارات/باقات/كوبونات/استعارات) مايتمسحش، عشان فواتيره ماتختفيش من تفاصيل الورديات والتقارير
+    has_history = False
+    for table in ('Visits', 'StudentSubscriptions', 'Coupons', 'Borrowings'):
+        c.execute(f"SELECT 1 FROM {table} WHERE student_id = ? LIMIT 1", (student_id,))
+        if c.fetchone():
+            has_history = True
+            break
+    if has_history:
+        conn.close()
+        flash("لا يمكن حذف هذا الطالب لأن له سجل سابق (زيارات أو باقات أو كوبونات أو استعارات) مرتبط بحسابات الورديات.", "error")
+        return redirect(url_for('manage_students'))
+
     # إذا لم يكن هناك زيارة نشطة، قم بحذفه
     c.execute("DELETE FROM Students WHERE student_id = ?", (student_id,))
     conn.commit()
@@ -1753,6 +1875,12 @@ def import_students():
             phone   = '' if phone == 'None' else phone
             college = '' if college == 'None' else college
             year    = '' if year == 'None' else year
+
+            # Excel بيشيل الصفر من أول الرقم لو الخلية رقم (1012345678 أو 1012345678.0) - نرجعه
+            if phone.endswith('.0') and phone[:-2].isdigit():
+                phone = phone[:-2]
+            if phone.isdigit() and len(phone) == 10 and phone.startswith('1'):
+                phone = '0' + phone
 
             # تخطي الصفوف الفارغة
             if not name and not phone:
@@ -1935,8 +2063,9 @@ def apply_manual_discount(visit_id):
     m_type = request.form.get('manual_type', 'fixed')
     m_value = float(request.form.get('manual_value', 0))
     
-    # بنرجع للفاتورة ومعانا البيانات دي في الرابط
-    return redirect(url_for('show_invoice', visit_id=visit_id, m_type=m_type, m_value=m_value))
+    # بنرجع للفاتورة ومعانا البيانات دي في الرابط (ومعاها الكوبون اللي كان مطبق عشان مايضيعش)
+    return redirect(url_for('show_invoice', visit_id=visit_id, m_type=m_type, m_value=m_value,
+                            applied_code=request.form.get('applied_code') or None))
 
 @app.route("/edit_student/<int:student_id>", methods=['GET', 'POST'])
 def edit_student(student_id):
@@ -1970,7 +2099,7 @@ def manage_products():
         c.execute("INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
                   (request.form['name'], float(request.form['purchase_price']), float(request.form['sale_price']), float(request.form['stock_quantity'])))
         conn.commit()
-    c.execute("SELECT * FROM Products WHERE name != 'اشتراك باقة' ORDER BY name")
+    c.execute("SELECT * FROM Products WHERE name NOT IN (?, ?) ORDER BY name", (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT))
     prods = c.fetchall()
     conn.close()
     return render_template('manage_products.html', products=prods)
@@ -2085,8 +2214,7 @@ def edit_sale_quantity(sale_id):
             # --- (جزء مهم جداً) تحديث إجمالي الوردية بالفرق ---
             price_diff = new_total_price - sale['total_price']
             if sale['shift_id']:
-                c.execute("UPDATE Shifts SET revenue_sales = revenue_sales + ? WHERE shift_id = ?", 
-                          (price_diff, sale['shift_id']))
+                adjust_closed_shift_sales(c, sale['shift_id'], price_diff)
             
             # ج. تحديث البيعة بالقيم الجديدة
             c.execute("UPDATE Sales SET quantity=?, total_price=? WHERE sale_id=?", 
@@ -2138,8 +2266,7 @@ def delete_sale_item(sale_id):
 
         # ب. اخصم قيمة البيعة المحذوفة من إجمالي مبيعات الوردية
         if sale['shift_id']:
-            c.execute("UPDATE Shifts SET revenue_sales = revenue_sales - ? WHERE shift_id = ?",
-                      (sale['total_price'], sale['shift_id']))
+            adjust_closed_shift_sales(c, sale['shift_id'], -sale['total_price'])
 
         # ج. احذف البيعة
         c.execute("DELETE FROM Sales WHERE sale_id=?", (sale_id,))
@@ -2167,7 +2294,10 @@ def delete_user(user_id):
     if session.get('role') != 'manager': return redirect(url_for('dashboard'))
     conn = get_db()
     c = conn.cursor()
-    if user_id != session['user_id']:
+    c.execute("SELECT 1 FROM Shifts WHERE user_id=? AND end_time IS NULL", (user_id,))
+    if c.fetchone():
+        flash("لا يمكن حذف موظف عنده وردية مفتوحة. يجب إنهاء ورديته أولاً.", "error")
+    elif user_id != session['user_id']:
         c.execute("DELETE FROM Users WHERE user_id=?", (user_id,))
         conn.commit()
     conn.close()
@@ -2220,7 +2350,7 @@ def generate_coupon(student_id):
         conn.commit()
         
         msg = f"أهلا {student['name']}، ليك كوبون خصم {val}" + ("%" if dt=='percentage' else "ج") + f" الكود: {code}"
-        link = f"https://wa.me/20{student['phone'][1:]}?text={urllib.parse.quote(msg)}"
+        link = f"https://wa.me/{to_whatsapp_number(student['phone'])}?text={urllib.parse.quote(msg)}"
         conn.close()
         return redirect(url_for('coupon_created', student_name=student['name'], coupon_code=code, coupon_value=val, coupon_type=dt, whatsapp_link=link))
 
@@ -2267,7 +2397,8 @@ def financial_reports():
     d_str = request.args.get('report_date')
     if not d_str: d_str = datetime.date.today().strftime("%Y-%m-%d")
     
-    c.execute("""SELECT S.*, U.username FROM Shifts S JOIN Users U ON S.user_id=U.user_id 
+    # LEFT JOIN: ورديات موظف اتمسح لازم تفضل ظاهرة في التقرير
+    c.execute("""SELECT S.*, COALESCE(U.username, 'موظف محذوف') AS username FROM Shifts S LEFT JOIN Users U ON S.user_id=U.user_id 
                  WHERE S.end_time IS NOT NULL AND DATE(S.start_time)=? ORDER BY S.start_time DESC""", (d_str,))
     shifts = c.fetchall()
     
@@ -2288,7 +2419,7 @@ def shift_details(shift_id):
     if session.get('role') != 'manager': return redirect(url_for('dashboard'))
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT S.*, U.username FROM Shifts S JOIN Users U ON S.user_id=U.user_id WHERE S.shift_id=?", (shift_id,))
+    c.execute("SELECT S.*, COALESCE(U.username, 'موظف محذوف') AS username FROM Shifts S LEFT JOIN Users U ON S.user_id=U.user_id WHERE S.shift_id=?", (shift_id,))
     shift = c.fetchone()
     if not shift: return redirect(url_for('financial_reports'))
     
@@ -2471,6 +2602,12 @@ def reservations():
         start_dt = datetime.datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
         end_dt   = datetime.datetime.strptime(end,   "%Y-%m-%d %H:%M:%S")
 
+        # الحجز الثابت بيتكرر بنفس الساعات كل يوم، فلازم النهاية تكون بعد البداية في نفس اليوم
+        if end_dt <= start_dt or (request.form.get('is_recurring') == '1' and end_dt.time() <= start_dt.time()):
+            flash("⚠️ وقت نهاية الحجز لازم يكون بعد وقت البداية.", "error")
+            conn.close()
+            return redirect(url_for('reservations'))
+
         if start_dt < datetime.datetime.now():
             flash("⚠️ لا يمكن الحجز! يجب أن يكون تاريخ ووقت البداية مستقبلياً.", "error")
             conn.close()
@@ -2512,7 +2649,7 @@ def reservations():
                     # فحص التضارب لكل يوم على حدة
                     c.execute("""
                         SELECT reservation_id FROM Reservations
-                        WHERE room_id = ? AND status = 'confirmed'
+                        WHERE room_id = ? AND status IN ('confirmed', 'active')
                         AND (
                             (start_time <= ? AND end_time >= ?) OR
                             (start_time <= ? AND end_time >= ?) OR
@@ -2545,7 +2682,7 @@ def reservations():
             # ─── الحجز العادي (الكود الأصلي) ───
             c.execute("""
                 SELECT * FROM Reservations 
-                WHERE room_id = ? AND status = 'confirmed'
+                WHERE room_id = ? AND status IN ('confirmed', 'active')
                 AND (
                     (start_time <= ? AND end_time >= ?) OR
                     (start_time <= ? AND end_time >= ?) OR
@@ -2569,9 +2706,9 @@ def reservations():
     c.execute("""
         SELECT R.*, RM.name as room_name 
         FROM Reservations R JOIN Rooms RM ON R.room_id = RM.room_id
-        WHERE R.status = 'confirmed' AND R.end_time >= datetime('now')
+        WHERE R.status IN ('confirmed', 'active') AND R.end_time >= ?
         ORDER BY R.start_time ASC
-    """)
+    """, (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),))  # التوقيت المحلي، مش UTC زي datetime('now')
     res_list = c.fetchall()
     
     # نجيب قائمة الغرف عشان الفورم
@@ -2618,12 +2755,13 @@ def edit_subscription_type(type_id):
     pkg = c.fetchone()
     conn.close()
     return render_template('edit_subscription_type.html', pkg=pkg)
-@app.route("/cancel_reservation/<int:res_id>")
+@app.route("/cancel_reservation/<int:res_id>", methods=['POST'])
 def cancel_reservation(res_id):
     if 'user_id' not in session: return redirect(url_for('login'))
     conn = get_db()
     c = conn.cursor()
-    c.execute("UPDATE Reservations SET status='cancelled' WHERE reservation_id=?", (res_id,))
+    # بنلغي الحجز المؤكد بس، مش حجز بدأ فعلاً أو خلص
+    c.execute("UPDATE Reservations SET status='cancelled' WHERE reservation_id=? AND status='confirmed'", (res_id,))
     conn.commit()
     conn.close()
     flash("تم إلغاء الحجز.", "info")
@@ -2714,6 +2852,10 @@ def start_reservation_visit(res_id):
     res = c.fetchone()
     
     if not res: return redirect(url_for('reservations'))
+    if res['status'] != 'confirmed':
+        conn.close()
+        flash("هذا الحجز بدأ بالفعل أو تم إلغاؤه.", "error")
+        return redirect(url_for('reservations'))
 
     # 2. شوف العميل ده متسجل عندنا قبل كده ولا لأ؟ (بالتليفون)
     c.execute("SELECT student_id FROM Students WHERE phone=?", (res['phone'],))
@@ -2803,10 +2945,17 @@ def borrow_book():
     
     phone = request.form['student_phone']
     book_id = request.form['book_id']
-    
+
     conn = get_db()
     c = conn.cursor()
-    
+
+    # التأمين فلوس بتدخل الدرج، فلازم يتسجل على وردية مفتوحة
+    shift_id = get_open_shift_id(c)
+    if not shift_id:
+        conn.close()
+        flash("يجب فتح وردية أولاً قبل تسجيل الاستعارة.", "error")
+        return redirect(url_for('library'))
+
     # 1. هات بيانات الطالب
     c.execute("SELECT * FROM Students WHERE phone=?", (phone,))
     student = c.fetchone()
@@ -2817,7 +2966,11 @@ def borrow_book():
     # 2. هات بيانات الكتاب
     c.execute("SELECT * FROM Books WHERE book_id=?", (book_id,))
     book = c.fetchone()
-    
+    if not book or not book['is_available']:
+        conn.close()
+        flash("هذا الكتاب غير متاح للاستعارة حالياً.", "error")
+        return redirect(url_for('library'))
+
     # 3. تسجيل الاستعارة (ودفع التأمين)
     # التأمين بيدخل الخزنة كأنه إيراد مؤقت (أو عهدة)، بس للتبسيط هنعتبره دخل الدرج دلوقتي
     c.execute("""
@@ -2828,12 +2981,14 @@ def borrow_book():
     # تحديث حالة الكتاب لـ "غير متاح"
     c.execute("UPDATE Books SET is_available=0 WHERE book_id=?", (book_id,))
     
-    # تسجيل حركة في الدرج (اختياري: لو عايز التأمين يسمع في إيراد الوردية)
-    # يفضل نسجله عشان الدرج يظبط، ولما يرجع نخصمه
-    if 'active_shift_id' in session:
-        # بنسجله في المصروفات بالسالب (أو إيراد مبيعات) .. للتبسيط هنزود إيراد المبيعات
-        c.execute("UPDATE Shifts SET revenue_sales = revenue_sales + ? WHERE shift_id=?", 
-                  (book['price'], session['active_shift_id']))
+    # تسجيل التأمين في الدرج كبيعة على منتج داخلي (نفس فكرة "اشتراك باقة")،
+    # عشان قفل الوردية بيعيد حساب الإيراد من جدول Sales - التحديث المباشر لـ Shifts كان بيضيع
+    deposit_product_id = get_internal_product_id(c, BOOK_DEPOSIT_PRODUCT)
+
+    c.execute(
+        "INSERT INTO Sales (product_id, user_id, shift_id, quantity, total_price, visit_id) VALUES (?, ?, ?, ?, ?, NULL)",
+        (deposit_product_id, session['user_id'], shift_id, 1, book['price'])
+    )
 
     conn.commit()
     conn.close()
@@ -2846,14 +3001,25 @@ def return_book(borrow_id):
     
     conn = get_db()
     c = conn.cursor()
-    
+
+    # المرتجع للطالب بيخرج من الدرج، فلازم يتسجل على وردية مفتوحة
+    shift_id = get_open_shift_id(c)
+    if not shift_id:
+        conn.close()
+        flash("يجب فتح وردية أولاً قبل إرجاع الكتاب.", "error")
+        return redirect(url_for('library'))
+
     # 1. هات بيانات الاستعارة
     c.execute("""
         SELECT B.*, BK.rental_fee_per_day, BK.price as book_price 
         FROM Borrowings B JOIN Books BK ON B.book_id = BK.book_id 
         WHERE B.borrow_id=?""", (borrow_id,))
     borrow = c.fetchone()
-    
+    if not borrow or borrow['status'] != 'active':
+        conn.close()
+        flash("هذه الاستعارة غير موجودة أو تم إرجاعها بالفعل.", "error")
+        return redirect(url_for('library'))
+
     # 2. حساب الأيام والتكلفة
     borrow_date = datetime.datetime.strptime(borrow['borrow_date'], "%Y-%m-%d %H:%M:%S")
     return_date = datetime.datetime.now()
@@ -2874,19 +3040,18 @@ def return_book(borrow_id):
     c.execute("UPDATE Books SET is_available=1 WHERE book_id=?", (borrow['book_id'],))
     
     # 4. تظبيط الدرج (الخزنة)
-    # إحنا كنا دخلنا التأمين كله في الدرج وقت الاستعارة.
-    # دلوقتي بنخرج المبلغ المرتجع للطالب من الدرج كمصروف.
-    if 'active_shift_id' in session:
-        # المبلغ اللي كسبناه فعلياً هو الـ rental_cost
-        # المبلغ اللي خرج من الدرج هو amount_to_return
-        # بنسجل عملية "إرجاع تأمين" في المصروفات
-        if amount_to_return > 0:
-            c.execute("INSERT INTO Expenses (user_id, shift_id, description, amount) VALUES (?, ?, ?, ?)",
-                      (session['user_id'], session['active_shift_id'], f"إرجاع تأمين كتاب (استعارة #{borrow_id})", amount_to_return))
-            
-            # تحديث إجمالي مصروفات الوردية
-            c.execute("UPDATE Shifts SET total_expenses = total_expenses + ? WHERE shift_id=?",
-                      (amount_to_return, session['active_shift_id']))
+    # إحنا كنا دخلنا التأمين كله في الدرج وقت الاستعارة (كبيعة).
+    # دلوقتي بنخرج المبلغ المرتجع للطالب من الدرج كمصروف (قفل الوردية بيجمع المصروفات من جدول Expenses).
+    if amount_to_return > 0:
+        c.execute("INSERT INTO Expenses (user_id, shift_id, description, amount) VALUES (?, ?, ?, ?)",
+                  (session['user_id'], shift_id, f"إرجاع تأمين كتاب (استعارة #{borrow_id})", amount_to_return))
+    elif amount_to_return < 0:
+        # الإيجار عدى قيمة التأمين: الطالب بيدفع الفرق، فبنسجله كبيعة على نفس المنتج الداخلي
+        deposit_product_id = get_internal_product_id(c, BOOK_DEPOSIT_PRODUCT)
+        c.execute(
+            "INSERT INTO Sales (product_id, user_id, shift_id, quantity, total_price, visit_id) VALUES (?, ?, ?, ?, ?, NULL)",
+            (deposit_product_id, session['user_id'], shift_id, 1, -amount_to_return)
+        )
 
     conn.commit()
     conn.close()
@@ -2917,11 +3082,16 @@ def reset_data_keep_users():
     for table in tables:
         t_name = table['name']
         # استثناء جدول المستخدمين وجداول النظام
-        if t_name not in ['Users', 'sqlite_sequence','Students','Products','Rooms']:
+        # الإعدادات (أسعار الشرائح والسماحية وسقف الخصم) وأنواع الباقات والكتب بيانات أساسية مش تعاملات، فبنحتفظ بيها
+        if t_name not in ['Users', 'sqlite_sequence', 'Students', 'Products', 'Rooms',
+                          'Settings', 'MembershipTypes', 'Books']:
             c.execute(f"DELETE FROM {t_name}")
             # تصفير العداد (Auto Increment) للجدول ده
             c.execute("DELETE FROM sqlite_sequence WHERE name=?", (t_name,))
-    
+
+    # الاستعارات اتمسحت، فكل الكتب ترجع متاحة
+    c.execute("UPDATE Books SET is_available = 1")
+
     conn.commit()
     conn.close()
     
@@ -2932,7 +3102,7 @@ def reset_data_keep_users():
     # 5. تنظيف السيشن من أي شيفت كان مفتوح (لأننا مسحنا الشيفتات)
     session.pop('active_shift_id', None)
     
-    flash("تم تصفير قاعدة البيانات بنجاح! (تم الاحتفاظ ببيانات الموظفين والمدير)", "success")
+    flash("تم تصفير التعاملات بنجاح! (تم الاحتفاظ بالمستخدمين والطلاب والمنتجات والغرف والكتب والباقات والإعدادات)", "success")
     return redirect(url_for('dashboard'))
 # --- دالة فتح المتصفح ---
 def open_browser():
