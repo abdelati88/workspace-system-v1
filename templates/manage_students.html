@@ -9,23 +9,32 @@
         <h3 style="margin-bottom:6px;">استيراد طلاب من ملف Excel</h3>
 
         <p style="font-size: 0.85em; color: var(--muted); margin:0 0 10px;">
-            يجب أن يحتوي ملف الـ Excel على الأعمدة التالية بالضبط في الصف الأول (مهما كان ترتيبهم):
+            اكتب في أول صف في الملف أسماء الأعمدة دي (عربي أو إنجليزي، وبأي ترتيب):
         </p>
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
-            {% for col in ['name', 'phone', 'college', 'year'] %}
+            {% for col in ['الاسم / name', 'التليفون / phone', 'الكلية / college', 'الفرقة / year'] %}
             <code style="background: var(--ink); color: var(--surface); padding:3px 10px; border-radius:5px; font-size:0.82em;">{{ col }}</code>
             {% endfor %}
         </div>
         <p style="font-size: 0.8em; color: var(--warning); margin:0 0 14px;">
-            الاسم ورقم التليفون <strong>إلزاميان</strong>. الطلاب بنفس رقم التليفون الموجود مسبقاً سيتم تخطيهم تلقائياً.
+            الاسم ورقم التليفون <strong>إلزاميين</strong>. بعد الاستيراد هيظهر لك تقرير بكل صف ماتضافش والسبب.
         </p>
 
         <form action="{{ url_for('import_students') }}" method="POST" enctype="multipart/form-data"
-              style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"
+              onsubmit="return !this.replace_all || !this.replace_all.checked || confirm('هيتمسح كل الطلاب اللي مالهمش زيارات أو باقات قبل الاستيراد. متأكد؟');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="file" name="excel_file" accept=".xlsx,.xls" required style="flex:1; min-width:220px;">
+            <input type="file" name="excel_file" accept=".xlsx" required style="flex:1; min-width:220px;">
             <button type="submit" class="btn btn-success">استيراد</button>
+            {% if session.get('role') == 'manager' %}
+            <label style="flex-basis:100%; display:flex; gap:8px; align-items:flex-start; font-size:0.9em; cursor:pointer; margin:0;">
+                <input type="checkbox" name="replace_all" value="1" style="width:auto; margin-top:4px;">
+                <span><strong>امسح الطلاب الحاليين وابدأ من الملف ده</strong><br>
+                <span style="color: var(--muted);">الطلاب اللي ليهم زيارات أو باقات قديمة مش هيتمسحوا (عشان التقارير)، ولو موجودين في الملف بياناتهم هتتحدث منه.</span></span>
+            </label>
+            {% endif %}
         </form>
+        <a href="{{ url_for('import_report') }}" style="font-size:0.85em; display:inline-block; margin-top:10px;">عرض تقرير آخر استيراد</a>
     </div>
 
     <div class="panel">
@@ -88,6 +97,6 @@
         </table>
     </div>
 
-    <a href="javascript:history.back()" class="btn-back">رجوع</a>
+    <a href="{{ url_for('dashboard') }}" class="btn-back">رجوع</a>
 
 {% endblock %}

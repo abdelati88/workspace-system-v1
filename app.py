@@ -2,7 +2,12 @@ import os
 import openpyxl  # Ensure PyInstaller bundles the Excel engine
 import sys
 import webbrowser
-from threading import Timer
+import threading
+import time
+import socket
+import json
+import re
+import unicodedata
 import sqlite3
 import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
@@ -29,6 +34,34 @@ else:
 
 # 1. تحديد مكان الداتا بيز (دائماً جنب الملف التشغيلي عشان الحفظ)
 DATABASE = os.path.join(BASE_DIR, 'workspace.db')
+
+PORT = 5009
+APP_URL = f"http://127.0.0.1:{PORT}"
+
+def server_already_running():
+    try:
+        with socket.create_connection(('127.0.0.1', PORT), timeout=1):
+            return True
+    except OSError:
+        return False
+
+if __name__ == '__main__':
+    # الـ EXE بيشتغل من غير الشباك الأسود (اللي كان بيتقفل بالغلط فالسيستم يقف)،
+    # فرسايل البرنامج والأخطاء بتتكتب في ملف workspace.log جنب البرنامج بدل الشاشة
+    if getattr(sys, 'frozen', False):
+        log_path = os.path.join(BASE_DIR, 'workspace.log')
+        try:
+            if os.path.getsize(log_path) > 5 * 1024 * 1024:
+                os.remove(log_path)
+        except OSError:
+            pass
+        sys.stdout = sys.stderr = open(log_path, 'a', encoding='utf-8', buffering=1)
+        print(f"\n===== Started {datetime.datetime.now():%Y-%m-%d %H:%M:%S} =====")
+
+    # لو البرنامج شغال أصلاً (حد فتحه مرتين)، نفتح المتصفح عليه ونخرج بدل ما نشغل نسخة تانية
+    if server_already_running():
+        webbrowser.open(APP_URL + "/dashboard")
+        sys.exit(0)
 
 # 2. تحديد مكان القوالب والصور (يا إما جوه الـ exe يا إما في الفولدر العادي)
 TEMPLATE_DIR = os.path.join(RESOURCES_DIR, 'templates')
@@ -57,10 +90,71 @@ app.secret_key = _load_or_create_secret_key()
 MANAGER_PHONE = "201070671508"
 
 # --- دالة الاتصال بالداتا بيز (تستخدم المسار الثابت) ---
+# =========================================================
+# 🔎 توحيد الأسماء والأرقام عشان البحث يلاقي الطالب مهما اتكتب
+# (أحمد/احمد، ة/ه، ى/ي، الرقم بصفر أو من غير، بمسافات أو بأرقام عربي)
+# =========================================================
+_AR_LETTERS = str.maketrans({'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا', 'ة': 'ه', 'ى': 'ي',
+                             'ؤ': 'و', 'ئ': 'ي', 'ـ': ''})
+_AR_DIACRITICS = re.compile('[ً-ْٰ]')
+
+def normalize_name(value):
+    text = _AR_DIACRITICS.sub('', str(value or '')).translate(_AR_LETTERS).replace(' ', ' ')
+    return ' '.join(text.lower().split())
+
+def phone_digits(value):
+    text = str(value or '').strip()
+    if re.fullmatch(r'\d+\.0', text):  # رقم جاي من خلية Excel رقمية (1012345678.0)
+        text = text[:-2]
+    return ''.join(str(unicodedata.digit(ch)) for ch in text if ch.isdigit())
+
+def normalize_phone(value):
+    """الجزء الثابت من الرقم: من غير كود مصر (20) ومن غير الصفر اللي في الأول"""
+    digits = phone_digits(value)
+    if digits.startswith('20') and len(digits) == 12:
+        digits = digits[2:]
+    return digits.lstrip('0')
+
+def clean_phone(value):
+    """شكل الرقم اللي بيتخزن: أرقام بس، والموبايل المصري يبدأ بصفر (01012345678)"""
+    digits = phone_digits(value)
+    core = normalize_phone(digits)
+    if len(core) == 10 and core.startswith('1'):
+        return '0' + core
+    return digits
+
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    conn.create_function('norm_name', 1, normalize_name, deterministic=True)
+    conn.create_function('norm_phone', 1, normalize_phone, deterministic=True)
     return conn
+
+def looks_like_phone(value):
+    return bool(re.fullmatch(r'[\d\s+\-]+', str(value or '').strip())) and len(phone_digits(value)) >= 4
+
+def find_students(c, query):
+    """بحث بالاسم (أي جزء منه وبأي ترتيب) أو بالتليفون (بأي شكل اتكتب بيه)"""
+    query = (query or '').strip()
+    if not query:
+        return []
+    conditions, params = [], []
+    if looks_like_phone(query):
+        conditions.append("norm_phone(phone) LIKE ?")
+        params.append(f"%{normalize_phone(query)}%")
+    words = normalize_name(query).split()
+    if words:
+        conditions.append("(" + " AND ".join("norm_name(name) LIKE ?" for _ in words) + ")")
+        params.extend(f"%{w}%" for w in words)
+    c.execute(f"SELECT * FROM Students WHERE {' OR '.join(conditions)} ORDER BY name LIMIT 50", params)
+    return c.fetchall()
+
+def find_student_by_phone(c, phone):
+    core = normalize_phone(phone)
+    if not core:
+        return None
+    c.execute("SELECT * FROM Students WHERE norm_phone(phone) = ? LIMIT 1", (core,))
+    return c.fetchone()
 
 # =========================================================
 # 🛡️ حماية CSRF: توكن لكل جلسة، والتحقق منه في أي POST
@@ -82,6 +176,14 @@ def check_csrf_token():
         if not expected or not submitted or not secrets.compare_digest(submitted, expected):
             flash("انتهت صلاحية الجلسة، برجاء المحاولة مرة أخرى.", "error")
             return redirect(request.referrer or url_for('dashboard'))
+
+# صفحات السيستم بتتغير كل لحظة (مين جوه، الفاتورة، الوردية)، فالمتصفح مايحتفظش بنسخة قديمة منها:
+# زر "رجوع" بيجيب الحالة الحالية بدل صفحة قديمة ممكن الموظف يتصرف على أساسها
+@app.after_request
+def no_store_pages(response):
+    if response.mimetype == 'text/html':
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 # =========================================================
 # ⚠️ إدخال غلط (حروف في خانة رقم، تاريخ بصيغة غلط...) بدل صفحة Error
@@ -175,22 +277,29 @@ def get_internal_product_id(c, name):
 # =========================================================
 # 🧮 تعديل مبيعات وردية مقفولة (المدير بيعدل/يمسح صنف بعد القفل)
 # الوردية المفتوحة مش محتاجة حاجة: قفل الوردية بيعيد حساب كل حاجة من الجداول.
-# الوردية المقفولة أرقامها متخزنة، فلازم الصافي يتعدل بنفس الفرق مع المبيعات.
+# الوردية المقفولة أرقامها متخزنة، فلازم تتعدل بنفس الفرق:
+# صنف كافيتريا → عمود الكافيتريا بس (مش داخل في الصافي). الباقات/التأمين → المبيعات والصافي.
+# ورديات اتقفلت قبل فصل الكافيتريا (revenue_catering فاضي) كانت الكافيتريا جوه الصافي، فبتتعدل زي زمان.
 # =========================================================
-def adjust_closed_shift_sales(c, shift_id, amount):
-    c.execute("""UPDATE Shifts SET revenue_sales = revenue_sales + ?, net_cash = net_cash + ?
-                 WHERE shift_id = ? AND end_time IS NOT NULL""", (amount, amount, shift_id))
+def adjust_closed_shift_sales(c, shift_id, amount, product_id):
+    c.execute("SELECT name FROM Products WHERE product_id = ?", (product_id,))
+    row = c.fetchone()
+    is_internal = bool(row) and row['name'] in (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT)
+    c.execute("""UPDATE Shifts SET
+                     revenue_catering = CASE WHEN revenue_catering IS NOT NULL AND ? = 0
+                                             THEN revenue_catering + ? ELSE revenue_catering END,
+                     revenue_sales = CASE WHEN revenue_catering IS NULL OR ? = 1
+                                          THEN revenue_sales + ? ELSE revenue_sales END,
+                     net_cash = CASE WHEN revenue_catering IS NULL OR ? = 1
+                                     THEN net_cash + ? ELSE net_cash END
+                 WHERE shift_id = ? AND end_time IS NOT NULL""",
+              (int(is_internal), amount, int(is_internal), amount, int(is_internal), amount, shift_id))
 
 # =========================================================
 # 📱 رقم واتساب دولي (مصر): 01012345678 → 201012345678
 # =========================================================
 def to_whatsapp_number(phone):
-    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
-    if digits.startswith('20'):
-        return digits
-    if digits.startswith('0'):
-        digits = digits[1:]
-    return '20' + digits
+    return '20' + normalize_phone(phone)
 
 # =========================================================
 # 🔧 ترقية قاعدة البيانات (إضافة أعمدة ناقصة لقواعد البيانات القديمة)
@@ -213,6 +322,8 @@ def run_startup_migrations():
     _ensure_column(c, 'Visits', 'manual_discount', 'manual_discount REAL DEFAULT 0')
     _ensure_column(c, 'Students', 'year', 'year TEXT')
     _ensure_column(c, 'Visits', 'reservation_id', 'reservation_id INTEGER REFERENCES Reservations(reservation_id)')
+    # إجمالي الكافيتريا لكل وردية (منفصل عن الصافي). الورديات القديمة بيفضل فاضي = الكافيتريا كانت جوه الصافي
+    _ensure_column(c, 'Shifts', 'revenue_catering', 'revenue_catering REAL')
 
     # جدول الإعدادات (حد كروت النت المجانية + أسعار الشرائح) - لازم يكون موجود
     # دايماً، حتى لو الداتا بيز اتعملت قبل ما الجدول ده يتضاف للسكيما الرئيسية
@@ -223,7 +334,6 @@ def run_startup_migrations():
         )
     """)
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', '2')")
-    c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', '15')")
     c.execute("INSERT OR IGNORE INTO Settings (setting_key, setting_value) VALUES ('tier_grace_minutes', '15')")
 
     conn.commit()
@@ -355,7 +465,10 @@ def from_flask_run_after_request(func):
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
-    # 1. السماح بالإغلاق للجميع (بدون شرط تسجيل الدخول)
+    # 1. الإغلاق للمدير بس: لو اتقفل السيستم كل الموظفين بيشوفوا "refused to connect" لحد ما حد يفتحه تاني
+    if session.get('role') != 'manager':
+        flash("إغلاق النظام للمدير فقط. لو عايز تخرج من حسابك استخدم زر (خروج).", "error")
+        return redirect(url_for('dashboard'))
     
     # 2. تصميم صفحة الوداع (HTML كامل)
     response_html = """
@@ -609,6 +722,85 @@ def start_shift():
     conn.close()
     return redirect(url_for('dashboard'))
 
+# =========================================================
+# 🧮 حساب الوردية - مكان واحد بيستخدمه: المراجعة قبل القفل، القفل نفسه، وتقرير الوردية
+# الكافيتريا (الكاترينج) بتتحسب لوحدها ومش بتدخل في صافي الوردية:
+#   صافي الوردية = الساعات (كاش) + الباقات + تأمين الكتب − المصروفات − الخصومات
+#   الكافيتريا   = كل مبيعات المنتجات العادية (كاش مباشر + طلبات الطلاب اللي حاسبوا)
+#   إجمالي الدرج = صافي الوردية + الكافيتريا (عشان الموظف يعد الفلوس اللي في الدرج)
+# =========================================================
+def compute_shift_totals(c, shift_id):
+    c.execute("""SELECT V.total_cost, R.name as room_name 
+                 FROM Visits V JOIN Rooms R ON V.room_id = R.room_id
+                 WHERE V.shift_id = ? AND V.payment_method = 'cash' AND V.check_out_time IS NOT NULL""", (shift_id,))
+    rev_shared = rev_private = 0.0
+    for v in c.fetchall():
+        if is_exclusive_room(v['room_name']):
+            rev_private += v['total_cost'] or 0
+        else:
+            rev_shared += v['total_cost'] or 0
+
+    # المبيعات المحسوبة: البيع الكاش المباشر + طلبات الزيارات اللي اتقفلت (اللي لسه جوه بتتحسب لما يحاسب)
+    c.execute("""
+        SELECT P.name           AS product_name,
+               CASE WHEN S.visit_id IS NULL THEN 'cash' ELSE 'visit' END AS sale_type,
+               SUM(S.quantity)  AS total_qty,
+               SUM(S.total_price) AS total_revenue
+        FROM Sales S
+        LEFT JOIN Products P ON S.product_id = P.product_id
+        WHERE S.shift_id = ?
+          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
+        GROUP BY S.product_id, P.name, CASE WHEN S.visit_id IS NULL THEN 1 ELSE 0 END
+        ORDER BY sale_type ASC, total_revenue DESC
+    """, (shift_id,))
+    package_sales = deposit_sales = 0.0
+    catering_cash = catering_visit = 0.0
+    catering_breakdown = []
+    for row in c.fetchall():
+        revenue = row['total_revenue'] or 0
+        if row['product_name'] == SUBSCRIPTION_PRODUCT:
+            package_sales += revenue
+        elif row['product_name'] == BOOK_DEPOSIT_PRODUCT:
+            deposit_sales += revenue
+        else:
+            catering_breakdown.append({
+                'product_name':  row['product_name'] or 'منتج محذوف',
+                'sale_type':     row['sale_type'],
+                'total_qty':     row['total_qty'] or 0,
+                'total_revenue': revenue,
+            })
+            if row['sale_type'] == 'cash':
+                catering_cash += revenue
+            else:
+                catering_visit += revenue
+
+    c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
+    expenses = c.fetchone()[0] or 0
+    c.execute("""SELECT SUM(total_discount), SUM(manual_discount) FROM Visits
+                 WHERE shift_id = ? AND check_out_time IS NOT NULL""", (shift_id,))
+    row = c.fetchone()
+    discounts, manual_discounts = row[0] or 0, row[1] or 0
+
+    rev_hours = rev_shared + rev_private
+    main_sales = package_sales + deposit_sales
+    catering = catering_cash + catering_visit
+    net_cash = rev_hours + main_sales - expenses - discounts
+    return {
+        'rev_shared': rev_shared, 'rev_private': rev_private, 'rev_hours': rev_hours,
+        'package_sales': package_sales, 'deposit_sales': deposit_sales, 'main_sales': main_sales,
+        'catering': catering, 'catering_cash': catering_cash, 'catering_visit': catering_visit,
+        'catering_breakdown': catering_breakdown,
+        'expenses': expenses, 'discounts': discounts, 'manual_discounts': manual_discounts,
+        'net_cash': net_cash, 'drawer_total': net_cash + catering,
+    }
+
+def shift_whatsapp_link(shift_id, employee, t):
+    report_text = (f"تقرير وردية {shift_id}\nموظف: {employee}\n"
+                   f"صافي الوردية (بدون الكافيتريا): {t['net_cash']:.2f} ج\n"
+                   f"الكافيتريا: {t['catering']:.2f} ج\n"
+                   f"إجمالي فلوس الدرج: {t['drawer_total']:.2f} ج")
+    return f"https://web.whatsapp.com/send?phone={MANAGER_PHONE}&text={urllib.parse.quote(report_text)}"
+
 @app.route("/end_shift", methods=['POST'])
 def end_shift():
     if 'active_shift_id' not in session: return redirect(url_for('dashboard'))
@@ -617,63 +809,37 @@ def end_shift():
     conn = get_db()
     c = conn.cursor()
     end_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # 1. إعادة الحسابات للتخزين النهائي
-    c.execute("""SELECT V.total_cost, R.name as room_name 
-                 FROM Visits V JOIN Rooms R ON V.room_id = R.room_id
-                 WHERE V.shift_id = ? AND V.payment_method = 'cash' AND V.check_out_time IS NOT NULL""", (shift_id,))
-    visits = c.fetchall()
+    t = compute_shift_totals(c, shift_id)
 
-    rev_shared = 0.0
-    rev_private = 0.0
-    for v in visits:
-        if 'Private' in v['room_name'] or 'Meeting' in v['room_name']:
-            rev_private += v['total_cost']
-        else:
-            rev_shared += v['total_cost']
-            
-    rev_hours = rev_shared + rev_private
-    c.execute("""
-        SELECT SUM(total_price) FROM Sales 
-        WHERE shift_id = ? 
-        AND (visit_id IS NULL OR visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
-    """, (shift_id,))
-    rev_sales = c.fetchone()[0] or 0
-    c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
-    expenses = c.fetchone()[0] or 0
-    c.execute("SELECT SUM(total_discount) FROM Visits WHERE shift_id = ? AND check_out_time IS NOT NULL", (shift_id,))
-    discounts = c.fetchone()[0] or 0
-    
-    net_cash = (rev_hours + rev_sales) - expenses - discounts
-    
-    # 2. تحديث قاعدة البيانات
-    c.execute("""UPDATE Shifts SET end_time=?, revenue_hours=?, revenue_sales=?, 
-                 total_expenses=?, total_discounts=?, net_cash=? WHERE shift_id=?""", 
-              (end_time, rev_hours, rev_sales, expenses, discounts, net_cash, shift_id))
+    # revenue_sales = الباقات وتأمين الكتب بس، والكافيتريا في عمودها لوحدها، والصافي من غير الكافيتريا
+    c.execute("""UPDATE Shifts SET end_time=?, revenue_hours=?, revenue_sales=?, revenue_catering=?,
+                 total_expenses=?, total_discounts=?, net_cash=? WHERE shift_id=? AND end_time IS NULL""", 
+              (end_time, t['rev_hours'], t['main_sales'], t['catering'],
+               t['expenses'], t['discounts'], t['net_cash'], shift_id))
     conn.commit()
     conn.close()
-    
-    # 3. تجهيز بيانات الطباعة
-    shift_data = {
-        'id': shift_id,
-        'end_time': end_time,
-        'employee': session.get('username'),
-        'rev_shared': rev_shared,
-        'rev_private': rev_private,
-        'rev_sales': rev_sales,
-        'expenses': expenses,
-        'discounts': discounts,
-        'net_cash': net_cash
-    }
-
-    # 4. رابط الواتساب
-    report_text = f"تقرير وردية {shift_id}\nموظف: {session.get('username')}\nصافي: {net_cash}"
-    encoded_msg = urllib.parse.quote(report_text)
-    whatsapp_link = f"https://web.whatsapp.com/send?phone={MANAGER_PHONE}&text={encoded_msg}"
-    
     session.pop('active_shift_id', None)
-    
-    return render_template('shift_ended_success.html', whatsapp_link=whatsapp_link, data=shift_data)
+
+    # بنحوّل لصفحة التقرير (GET) بدل ما نعرضها هنا، عشان زر "رجوع" أو تحديث الصفحة مايطلعش Error
+    return redirect(url_for('shift_report', shift_id=shift_id))
+
+@app.route("/shift_report/<int:shift_id>")
+def shift_report(shift_id):
+    if 'user_id' not in session: return redirect(url_for('login'))
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT S.*, COALESCE(U.username, 'موظف محذوف') AS username
+                 FROM Shifts S LEFT JOIN Users U ON S.user_id = U.user_id WHERE S.shift_id = ?""", (shift_id,))
+    shift = c.fetchone()
+    if not shift or not shift['end_time'] or (session.get('role') != 'manager' and shift['user_id'] != session.get('user_id')):
+        conn.close()
+        return redirect(url_for('dashboard'))
+    t = compute_shift_totals(c, shift_id)
+    conn.close()
+
+    shift_data = dict(t, id=shift_id, end_time=shift['end_time'], employee=shift['username'])
+    return render_template('shift_ended_success.html', data=shift_data,
+                           whatsapp_link=shift_whatsapp_link(shift_id, shift['username'], t))
 @app.route("/register_student", methods=['GET', 'POST'])
 def register_student():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -709,28 +875,36 @@ def register_student():
                 flash("صيغة الوقت غير صحيحة", "error")
                 return redirect(url_for('register_student', phone=phone, name=name, next=next_url, manual_time=raw_time))
         
+        name = ' '.join(name.split())
+        phone = clean_phone(phone)
+        if not name or not phone:
+            flash("لازم تكتب اسم الطالب ورقم تليفونه.", "error")
+            return redirect(url_for('register_student', phone=phone, name=name, next=next_url,
+                                    manual_time=clean_manual_time, manual_date=manual_date))
+
         conn = get_db()
         c = conn.cursor()
-        try:
+        # لو الرقم متسجل قبل كده (بأي شكل)، نكمل بالطالب الموجود بدل ما نرفض ونرجّع الموظف يلف في دايرة
+        existing = find_student_by_phone(c, phone)
+        if existing:
+            sid = existing['student_id']
+            flash(f"الرقم ده متسجل قبل كده باسم ({existing['name']})، فكمّلنا بيه على طول.", "info")
+        else:
             c.execute("INSERT INTO Students (name, phone, college, year) VALUES (?, ?, ?, ?)", 
                       (name, phone, college, year))
             conn.commit()
             sid = c.lastrowid
             flash(f"تم تسجيل {name} بنجاح", "success")
-            conn.close()
+        conn.close()
+
+        # --- (2) تمرير الوقت والتاريخ اليدوي المنظف للخطوة التالية ---
+        if next_url == 'select_room': 
+            return redirect(url_for('select_room', student_id=sid, manual_time=clean_manual_time, manual_date=manual_date))
+        
+        if next_url == 'sell_sub': 
+            return redirect(url_for('sell_subscription', student_id=sid))
             
-            # --- (2) تمرير الوقت والتاريخ اليدوي المنظف للخطوة التالية ---
-            if next_url == 'select_room': 
-                return redirect(url_for('select_room', student_id=sid, manual_time=clean_manual_time, manual_date=manual_date))
-            
-            if next_url == 'sell_sub': 
-                return redirect(url_for('sell_subscription', student_id=sid))
-                
-            return redirect(url_for('dashboard'))
-            
-        except sqlite3.IntegrityError:
-            flash("الطالب مسجل بالفعل", "error")
-            conn.close()
+        return redirect(url_for('dashboard'))
     
     return render_template('register_student.html', 
                            prefilled_phone=request.args.get('phone', ''), 
@@ -742,23 +916,22 @@ def register_student():
 def check_in():
     if 'user_id' not in session: return redirect(url_for('login'))
     
-    if request.method == 'POST':
-        query = request.form['search_query']
-        # --- السطر الجديد لسحب الوقت والتاريخ اليدوي ---
-        manual_time = request.form.get('manual_time') 
-        manual_date = request.form.get('manual_date')
+    # البحث بقى GET (?search_query=...) عشان زر "رجوع" في المتصفح مايطلعش صفحة "Confirm Form Resubmission"
+    query = (request.args.get('search_query') or '').strip()
+    if query:
+        manual_time = request.args.get('manual_time')
+        manual_date = request.args.get('manual_date')
         
         conn = get_db()
         c = conn.cursor()
-        pattern = f"%{query}%"
-        c.execute("SELECT * FROM Students WHERE phone = ? OR name LIKE ?", (query, pattern))
-        students = c.fetchall()
+        students = find_students(c, query)
         conn.close()
         
         if len(students) == 0:
             flash("طالب غير مسجل", "info")
-            phone = query if query.isdigit() else ""
-            name = query if not query.isdigit() else ""
+            is_phone = looks_like_phone(query)
+            phone = query if is_phone else ""
+            name = query if not is_phone else ""
             # بنبعت الوقت لصفحة التسجيل لو الطالب جديد
             return redirect(url_for('register_student', phone=phone, name=name, next='select_room', manual_time=manual_time, manual_date=manual_date))
             
@@ -960,13 +1133,6 @@ def show_invoice(visit_id):
             manual_discount_amount = manual_disc_value
         manual_discount_amount = min(manual_discount_amount, time_cost) # لا يتجاوز تكلفة الوقت
 
-        # الموظف (غير المدير) محدود بسقف الخصم من الإعدادات؛ نفس السقف المطبق فعلياً عند الدفع
-        if session.get('role') != 'manager':
-            c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
-            cap_row_preview = c.fetchone()
-            cap_preview = float(cap_row_preview['setting_value']) if cap_row_preview else 15.0
-            manual_discount_amount = min(manual_discount_amount, cap_preview)
-
     # هنا هنمرر المبلغ النهائي المحسوب وليس القيمة الأصلية
     # عشان نعرف نعرضه صح في الفاتورة لو طلب نسبة
     manual_discount_display = manual_discount_amount
@@ -999,10 +1165,6 @@ def show_invoice(visit_id):
                     disc_val = cp['discount_value']
                 discount_info = {"code": cp['code'], "amount": min(disc_val, time_cost)}
                 flash("تم تطبيق الكوبون", "success")
-
-    c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
-    cap_row = c.fetchone()
-    employee_discount_cap = float(cap_row['setting_value']) if cap_row else 15.0
 
     conn.close()
     
@@ -1037,8 +1199,7 @@ def show_invoice(visit_id):
                            # تمرير نوع وقيمة الخصم اليدوي الأصلية للعرض في الفورم لو كان موجود
                            manual_disc_type=manual_disc_type,
                            manual_disc_value=manual_disc_value,
-                           active_sub=active_sub,
-                           employee_discount_cap=employee_discount_cap)
+                           active_sub=active_sub)
 @app.route("/apply_coupon/<int:visit_id>", methods=['POST'])
 def apply_coupon(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -1076,15 +1237,6 @@ def confirm_payment(visit_id):
     except ValueError:
         manual_disc_value = 0
     manual_disc_value = max(0, manual_disc_value)
-    # سقف الخصم الخاص للموظف (غير المدير) - بييجي من الإعدادات، والمدير من غير سقف
-    employee_discount_cap = None
-    if session.get('role') != 'manager':
-        settings_conn = get_db()
-        settings_row = settings_conn.execute(
-            "SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'"
-        ).fetchone()
-        settings_conn.close()
-        employee_discount_cap = float(settings_row['setting_value']) if settings_row else 15.0
 
     conn = get_db()
     c = conn.cursor()
@@ -1178,9 +1330,6 @@ def confirm_payment(visit_id):
             else:
                 manual_disc = manual_disc_value
             manual_disc = min(manual_disc, remaining_for_manual)
-            # الموظف (غير المدير) محدود بسقف الخصم من الإعدادات؛ المدير بلا سقف
-            if employee_discount_cap is not None:
-                manual_disc = min(manual_disc, employee_discount_cap)
         else:
             manual_disc = 0
         final_discount += manual_disc
@@ -1229,94 +1378,7 @@ def shift_summary_preview():
     conn = get_db()
     c = conn.cursor()
     
-    # 1. إيرادات الساعات (كاش فقط) مقسّمة بنوع الغرفة
-    c.execute("""SELECT V.total_cost, R.name as room_name 
-                 FROM Visits V JOIN Rooms R ON V.room_id = R.room_id
-                 WHERE V.shift_id = ? AND V.payment_method = 'cash' AND V.check_out_time IS NOT NULL""", (shift_id,))
-    visits_cash = c.fetchall()
-
-    rev_shared = 0.0
-    rev_private = 0.0
-    for v in visits_cash:
-        if 'Private' in v['room_name'] or 'Meeting' in v['room_name']:
-            rev_private += v['total_cost']
-        else:
-            rev_shared += v['total_cost']
-
-    rev_hours_total = rev_shared + rev_private
-
-
-    # 2. مبيعات الكافيتريا (فقط المنتجات العادية)
-    # 3. مبيعات الباقات (فقط المنتجات من نوع باقة)
-    # ملاحظة: لا يوجد حقل category في Products، سنستخدم الاسم كتمييز مؤقت
-    c.execute("""
-        SELECT SUM(S.total_price) as cafeteria_sales
-        FROM Sales S
-        JOIN Products P ON S.product_id = P.product_id
-        WHERE S.shift_id = ?
-          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
-          AND (P.name NOT LIKE '%باقة%')
-    """, (shift_id,))
-    cafeteria_sales = c.fetchone()[0] or 0
-
-    c.execute("""
-        SELECT SUM(S.total_price) as package_sales
-        FROM Sales S
-        JOIN Products P ON S.product_id = P.product_id
-        WHERE S.shift_id = ?
-          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
-          AND (P.name LIKE '%باقة%')
-    """, (shift_id,))
-    package_sales = c.fetchone()[0] or 0
-
-    # 2.b — تفصيلة الكافيتريا: كل صنف × نوع البيع (نقدي أو مضاف لزيارة)
-    # نفس فلتر مبيعات الكافيتريا (كاش مباشر + زيارات اتقفلت في الوردية دي)
-    # عشان مجموع الـ cash + visit يطابق إجمالي الكارت اللي فوق بالظبط.
-    c.execute("""
-        SELECT P.name           AS product_name,
-               CASE WHEN S.visit_id IS NULL THEN 'cash' ELSE 'visit' END AS sale_type,
-               SUM(S.quantity)  AS total_qty,
-               SUM(S.total_price) AS total_revenue
-        FROM Sales S
-        JOIN Products P ON S.product_id = P.product_id
-        WHERE S.shift_id = ?
-          AND (S.visit_id IS NULL OR S.visit_id IN (SELECT visit_id FROM Visits WHERE check_out_time IS NOT NULL))
-          AND (P.name NOT LIKE '%باقة%')
-        GROUP BY P.product_id, P.name,
-                 CASE WHEN S.visit_id IS NULL THEN 1 ELSE 0 END
-        ORDER BY sale_type ASC, total_revenue DESC
-    """, (shift_id,))
-    cafeteria_breakdown = []
-    cafeteria_cash_total = 0.0
-    cafeteria_visit_total = 0.0
-    for row in c.fetchall():
-        revenue = row['total_revenue'] or 0
-        cafeteria_breakdown.append({
-            'product_name':  row['product_name'],
-            'sale_type':     row['sale_type'],
-            'total_qty':     row['total_qty'] or 0,
-            'total_revenue': revenue,
-        })
-        if row['sale_type'] == 'cash':
-            cafeteria_cash_total += revenue
-        else:
-            cafeteria_visit_total += revenue
-    
-    # 3. المصروفات
-    c.execute("SELECT SUM(amount) FROM Expenses WHERE shift_id = ?", (shift_id,))
-    expenses = c.fetchone()[0] or 0
-    
-    # 4. الخصومات
-    c.execute("SELECT SUM(total_discount) FROM Visits WHERE shift_id = ? AND check_out_time IS NOT NULL", (shift_id,))
-    total_discounts = c.fetchone()[0] or 0
-    
-    try:
-        c.execute("SELECT SUM(manual_discount) FROM Visits WHERE shift_id = ? AND check_out_time IS NOT NULL", (shift_id,))
-        manual_discounts = c.fetchone()[0] or 0
-    except sqlite3.OperationalError:
-        manual_discounts = 0
-    
-    net_cash = (rev_hours_total + cafeteria_sales + package_sales) - expenses - total_discounts
+    t = compute_shift_totals(c, shift_id)
 
     # 5. ─── تفاصيل كل زيارة (الجدول التفصيلي) ───
     # نجيب: (أ) كل زيارات الوردية الحالية (مقفولة أو مفتوحة)
@@ -1401,25 +1463,12 @@ def shift_summary_preview():
 
     conn.close()
     
-    summary = {
-        'rev_shared':       rev_shared,
-        'rev_private':      rev_private,
-        'cafeteria_sales':  cafeteria_sales,
-        'cafeteria_cash':   cafeteria_cash_total,
-        'cafeteria_visit':  cafeteria_visit_total,
-        'package_sales':    package_sales,
-        'expenses':         expenses,
-        'discounts':        total_discounts,
-        'manual_discounts': manual_discounts,
-        'net_cash':         net_cash,
-        'shift_id':         shift_id,
-        'employee':         session.get('username'),
-    }
+    summary = dict(t, shift_id=shift_id, employee=session.get('username'))
 
     return render_template('shift_summary_preview.html', summary=summary,
                            checked_out_visits=checked_out_visits,
                            still_inside_visits=still_inside_visits,
-                           cafeteria_breakdown=cafeteria_breakdown)
+                           cafeteria_breakdown=t['catering_breakdown'])
 @app.route("/add_sale/<int:visit_id>", methods=['GET', 'POST'])
 def add_sale(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -1607,22 +1656,14 @@ def sell_subscription():
     pre_sid = request.args.get('student_id')
     
     if request.method == 'POST':
-        if 'search_query' in request.form:
-            q = request.form['search_query']
-            c.execute("SELECT * FROM Students WHERE phone LIKE ? OR name LIKE ?", (f"%{q}%", f"%{q}%"))
-            studs = c.fetchall()
-            c.execute("SELECT * FROM MembershipTypes")
-            types = c.fetchall()
-            return render_template('sell_subscription.html', students=studs, types=types)
-        elif 'confirm_sub' in request.form:
+        if 'confirm_sub' in request.form:
             sid = request.form['student_id']
             tid = request.form['type_id']
 
             if not sid:
-                c.execute("SELECT * FROM MembershipTypes")
-                types = c.fetchall()
+                conn.close()
                 flash("يرجى اختيار الطالب أولاً قبل تفعيل الباقة.", "error")
-                return render_template('sell_subscription.html', students=[], types=types)
+                return redirect(url_for('sell_subscription', visit_id=request.form.get('visit_id_redirect') or None))
 
             shift_id = session.get('active_shift_id')
             if not shift_id:
@@ -1669,12 +1710,18 @@ def sell_subscription():
     c.execute("SELECT * FROM MembershipTypes")
     types = c.fetchall()
     studs = []
-    if pre_sid:
+    search_query = (request.args.get('search_query') or '').strip()
+    if search_query:
+        # البحث بقى GET عشان زر "رجوع" مايطلعش صفحة Confirm Form Resubmission
+        studs = find_students(c, search_query)
+        if not studs:
+            flash("مفيش طالب بالاسم أو الرقم ده.", "info")
+    elif pre_sid:
         c.execute("SELECT * FROM Students WHERE student_id=?", (pre_sid,))
         studs = c.fetchall()
     conn.close()
     return render_template('sell_subscription.html', types=types, students=studs,
-                           visit_id=request.args.get('visit_id', ''))
+                           visit_id=request.args.get('visit_id', ''), search_query=search_query)
 
 # --- الإدارة (المدير) ---
 
@@ -1705,9 +1752,6 @@ def manage_settings():
         new_limit = request.form.get('internet_free_limit', '2')
         c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('internet_free_limit', ?)", (new_limit,))
 
-        # --- حفظ سقف الخصم الخاص اللي يقدر الموظف (غير المدير) يعمله من غير رجوع للمدير ---
-        new_cap = request.form.get('employee_discount_cap', '15')
-        c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES ('employee_discount_cap', ?)", (new_cap,))
 
         # --- حفظ سماحية الدقايق بعد كل باقة قبل القفز للباقة اللي بعدها ---
         new_grace = request.form.get('tier_grace_minutes', '15')
@@ -1720,7 +1764,9 @@ def manage_settings():
                 c.execute("REPLACE INTO Settings (setting_key, setting_value) VALUES (?, ?)", (key, value))
 
         conn.commit()
+        conn.close()
         flash("تم تحديث الإعدادات بنجاح ✅", "success")
+        return redirect(url_for('manage_settings'))
 
     # --- قراءة القيم الحالية للعرض ---
     # حد كروت النت
@@ -1728,10 +1774,6 @@ def manage_settings():
     row = c.fetchone()
     current_limit = int(row['setting_value']) if row else 2
 
-    # سقف الخصم الخاص للموظف
-    c.execute("SELECT setting_value FROM Settings WHERE setting_key='employee_discount_cap'")
-    row = c.fetchone()
-    employee_discount_cap = float(row['setting_value']) if row else 15.0
 
     # سماحية الدقايق بعد كل باقة
     c.execute("SELECT setting_value FROM Settings WHERE setting_key='tier_grace_minutes'")
@@ -1747,7 +1789,6 @@ def manage_settings():
 
     conn.close()
     return render_template('manage_settings.html', current_limit=current_limit,
-                           employee_discount_cap=employee_discount_cap,
                            tier_grace_minutes=tier_grace_minutes, tier_prices=tier_prices)
 
 @app.route("/manage_students")
@@ -1761,14 +1802,17 @@ def manage_students():
     
     if q:
         pat = f"%{q}%"
-        c.execute("""
+        name_words = normalize_name(q).split() or ['']
+        name_match = " AND ".join("norm_name(name) LIKE ?" for _ in name_words)
+        phone_core = normalize_phone(q) if looks_like_phone(q) else None
+        c.execute(f"""
             SELECT * FROM Students 
-            WHERE name LIKE ? 
-               OR phone LIKE ? 
+            WHERE ({name_match})
+               OR (? IS NOT NULL AND norm_phone(phone) LIKE '%' || ? || '%')
                OR college LIKE ? 
                OR year LIKE ? 
             ORDER BY name
-        """, (pat, pat, pat, pat))
+        """, [f"%{w}%" for w in name_words] + [phone_core, phone_core, pat, pat])
     else:
         c.execute("SELECT * FROM Students ORDER BY name")
         
@@ -1794,13 +1838,7 @@ def delete_student(student_id):
         return redirect(url_for('manage_students'))
 
     # الطالب اللي ليه تاريخ (زيارات/باقات/كوبونات/استعارات) مايتمسحش، عشان فواتيره ماتختفيش من تفاصيل الورديات والتقارير
-    has_history = False
-    for table in ('Visits', 'StudentSubscriptions', 'Coupons', 'Borrowings'):
-        c.execute(f"SELECT 1 FROM {table} WHERE student_id = ? LIMIT 1", (student_id,))
-        if c.fetchone():
-            has_history = True
-            break
-    if has_history:
+    if student_has_history(c, student_id):
         conn.close()
         flash("لا يمكن حذف هذا الطالب لأن له سجل سابق (زيارات أو باقات أو كوبونات أو استعارات) مرتبط بحسابات الورديات.", "error")
         return redirect(url_for('manage_students'))
@@ -1814,23 +1852,43 @@ def delete_student(student_id):
     return redirect(url_for('manage_students'))
 
 
+# أسماء الأعمدة المقبولة في أول صف (إنجليزي أو عربي)
+IMPORT_COLUMNS = {
+    'name':    ['name', 'الاسم', 'اسم', 'اسم الطالب', 'الاسم بالكامل'],
+    'phone':   ['phone', 'mobile', 'التليفون', 'تليفون', 'رقم التليفون', 'الموبايل', 'موبايل',
+                'رقم الموبايل', 'الهاتف', 'رقم الهاتف', 'رقم'],
+    'college': ['college', 'الكلية', 'كلية'],
+    'year':    ['year', 'الفرقة', 'فرقة', 'السنة', 'الفرقه'],
+}
+IMPORT_REPORT_PATH = os.path.join(BASE_DIR, 'last_import_report.json')
+
+def student_has_history(c, student_id):
+    for table in ('Visits', 'StudentSubscriptions', 'Coupons', 'Borrowings'):
+        c.execute(f"SELECT 1 FROM {table} WHERE student_id = ? LIMIT 1", (student_id,))
+        if c.fetchone():
+            return True
+    return False
+
 @app.route("/import_students", methods=['POST'])
 def import_students():
-    """استيراد الطلاب من ملف Excel"""
+    """استيراد الطلاب من ملف Excel، مع تقرير كامل بكل صف اتضاف أو اتخطى وليه"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-
-    # الأعمدة المطلوبة بالترتيب (يجب أن تكون موجودة في الصف الأول)
-    REQUIRED_COLS = {'name', 'phone', 'college', 'year'}
+    replace_all = request.form.get('replace_all') == '1'
+    if replace_all and session.get('role') != 'manager':
+        flash("مسح الطلاب الحاليين قبل الاستيراد للمدير فقط.", "error")
+        return redirect(url_for('manage_students'))
 
     file = request.files.get('excel_file')
     if not file or file.filename == '':
         flash("⚠️ لم يتم اختيار أي ملف.", "error")
         return redirect(url_for('manage_students'))
-
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        flash("⚠️ الملف يجب أن يكون بصيغة Excel (.xlsx أو .xls).", "error")
+    if file.filename.lower().endswith('.xls'):
+        flash("⚠️ الملف بصيغة Excel القديمة (.xls). افتحه في Excel واعمل (حفظ باسم) واختار صيغة .xlsx وجرب تاني.", "error")
+        return redirect(url_for('manage_students'))
+    if not file.filename.lower().endswith('.xlsx'):
+        flash("⚠️ الملف يجب أن يكون بصيغة Excel (.xlsx).", "error")
         return redirect(url_for('manage_students'))
 
     conn = None
@@ -1839,95 +1897,109 @@ def import_students():
         wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
         ws = wb.active
 
-        # قراءة رأس الجدول (الصف الأول)
-        header_row = [str(cell.value).strip().lower() if cell.value else '' for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-
-        # التحقق من وجود الأعمدة المطلوبة
-        missing = REQUIRED_COLS - set(header_row)
+        # قراءة رأس الجدول (الصف الأول) ومطابقته بالأسماء المقبولة
+        header_row = [normalize_name(cell.value) for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+        col_map = {}
+        for key, aliases in IMPORT_COLUMNS.items():
+            for alias in aliases:
+                if normalize_name(alias) in header_row:
+                    col_map[key] = header_row.index(normalize_name(alias))
+                    break
+        missing = [k for k in ('name', 'phone') if k not in col_map]
         if missing:
-            flash(
-                f"❌ خطأ في ترويسة الملف: الأعمدة التالية مفقودة أو غلط في الاسم: "
-                f"{', '.join(sorted(missing))}. "
-                f"الأعمدة الموجودة في ملفك: {', '.join([h for h in header_row if h])}",
-                "error"
-            )
+            flash("❌ مش لاقي عمود " + " و ".join({'name': 'الاسم', 'phone': 'التليفون'}[k] for k in missing) +
+                  " في أول صف من الملف. اكتب في أول صف: الاسم، التليفون، الكلية، الفرقة (أو name, phone, college, year). "
+                  f"الموجود في ملفك: {', '.join(h for h in header_row if h) or 'صف فاضي'}", "error")
             return redirect(url_for('manage_students'))
 
-        # خريطة (اسم العمود → رقم العمود)
-        col_map = {name: idx for idx, name in enumerate(header_row)}
+        def cell(row, key):
+            idx = col_map.get(key)
+            if idx is None or idx >= len(row) or row[idx] is None:
+                return ''
+            value = str(row[idx]).replace(' ', ' ').strip()
+            return '' if value == 'None' else value
 
         conn = get_db()
         c = conn.cursor()
 
-        inserted = 0
-        skipped_dup = 0
-        skipped_empty = 0
-        errors = []
+        kept_with_history = removed = 0
+        if replace_all:
+            c.execute("SELECT student_id FROM Students")
+            for (sid,) in c.fetchall():
+                if student_has_history(c, sid):
+                    kept_with_history += 1
+                else:
+                    c.execute("DELETE FROM Students WHERE student_id = ?", (sid,))
+                    removed += 1
+
+        inserted = updated = 0
+        problems = []          # كل صف ماتضافش: (رقم الصف، الاسم، التليفون، السبب)
+        seen_in_file = {}      # الرقم → رقم أول صف ظهر فيه
+        empty_rows = 0
 
         for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-            name    = str(row[col_map['name']]).replace('\u00a0', ' ').strip()   if row[col_map['name']]    else ''
-            phone   = str(row[col_map['phone']]).replace('\u00a0', '').strip()  if row[col_map['phone']]   else ''
-            college = str(row[col_map['college']]).strip() if row[col_map['college']] else ''
-            year    = str(row[col_map['year']]).strip()   if row[col_map['year']]    else ''
+            name = ' '.join(cell(row, 'name').split())
+            raw_phone = cell(row, 'phone')
+            college, year = cell(row, 'college'), cell(row, 'year')
 
-            # تنظيف: لو القيمة "None" تحويلها لفراغ
-            name    = '' if name == 'None' else name
-            phone   = '' if phone == 'None' else phone
-            college = '' if college == 'None' else college
-            year    = '' if year == 'None' else year
-
-            # Excel بيشيل الصفر من أول الرقم لو الخلية رقم (1012345678 أو 1012345678.0) - نرجعه
-            if phone.endswith('.0') and phone[:-2].isdigit():
-                phone = phone[:-2]
-            if phone.isdigit() and len(phone) == 10 and phone.startswith('1'):
-                phone = '0' + phone
-
-            # تخطي الصفوف الفارغة
-            if not name and not phone:
-                skipped_empty += 1
+            if not name and not raw_phone:
+                empty_rows += 1
                 continue
-
-            # التحقق من الحقول الإلزامية
             if not name:
-                errors.append(f"صف {row_num}: الاسم فارغ")
+                problems.append((row_num, '', raw_phone, 'الاسم فاضي'))
                 continue
-            if not phone:
-                errors.append(f"صف {row_num}: رقم التليفون فارغ (الطالب: {name})")
+            if not raw_phone:
+                problems.append((row_num, name, '', 'رقم التليفون فاضي'))
+                continue
+            phone = clean_phone(raw_phone)
+            core = normalize_phone(phone)
+            if len(core) < 7:
+                problems.append((row_num, name, raw_phone, 'رقم التليفون ناقص أو مش صحيح'))
+                continue
+            if core in seen_in_file:
+                problems.append((row_num, name, raw_phone, f'نفس الرقم متكرر في الملف (صف {seen_in_file[core]})'))
+                continue
+            seen_in_file[core] = row_num
+
+            existing = find_student_by_phone(c, phone)
+            if existing:
+                if replace_all:
+                    # طالب ليه سجل قديم واتساب: نحدّث بياناته من الملف الجديد
+                    c.execute("UPDATE Students SET name=?, college=?, year=? WHERE student_id=?",
+                              (name, college, year, existing['student_id']))
+                    updated += 1
+                else:
+                    problems.append((row_num, name, raw_phone, f"الرقم متسجل قبل كده باسم ({existing['name']})"))
                 continue
 
-            # التحقق من التكرار (نفس رقم التليفون) مع تجاهل المسافات الطرفية
-            c.execute("SELECT student_id FROM Students WHERE TRIM(phone) = ?", (phone,))
-            if c.fetchone():
-                skipped_dup += 1
-                continue
-
-            # إدراج الطالب
-            c.execute(
-                "INSERT INTO Students (name, phone, college, year) VALUES (?, ?, ?, ?)",
-                (name, phone, college, year)
-            )
+            c.execute("INSERT INTO Students (name, phone, college, year) VALUES (?, ?, ?, ?)",
+                      (name, phone, college, year))
             inserted += 1
 
         conn.commit()
 
-        # رسالة النتيجة
-        msg_parts = []
-        if inserted:
-            msg_parts.append(f"✅ تم إضافة {inserted} طالب بنجاح")
-        if skipped_dup:
-            msg_parts.append(f"⏭️ تخطي {skipped_dup} (رقم تليفون مكرر)")
-        if skipped_empty:
-            msg_parts.append(f"🔘 تخطي {skipped_empty} صف فارغ")
-        if errors:
-            msg_parts.append(f"⚠️ {len(errors)} خطأ: " + " | ".join(errors[:5]))  # أول 5 أخطاء فقط
+        report = {
+            'file_name': file.filename,
+            'time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            'replace_all': replace_all, 'removed': removed, 'kept_with_history': kept_with_history,
+            'inserted': inserted, 'updated': updated, 'empty_rows': empty_rows,
+            'problems': [{'row': r, 'name': n, 'phone': p, 'reason': why} for r, n, p, why in problems],
+        }
+        try:
+            with open(IMPORT_REPORT_PATH, 'w', encoding='utf-8') as f:
+                json.dump(report, f, ensure_ascii=False)
+        except OSError:
+            pass
 
-        final_msg = " — ".join(msg_parts) if msg_parts else "لم يتم إضافة أي طالب."
-        flash(final_msg, "success" if inserted else "warning")
+        flash(f"✅ تم إضافة {inserted} طالب" + (f" وتحديث {updated}" if updated else "") +
+              (f" — {len(problems)} صف ماتضافش، التفاصيل تحت" if problems else ""),
+              "success" if inserted or updated else "warning")
 
     except Exception as e:
         if conn:
             conn.rollback()
-        flash(f"حدث خطأ أثناء الاستيراد: {str(e)}", "error")
+        app.logger.exception("Excel import failed")
+        flash(f"حدث خطأ أثناء الاستيراد ومفيش أي حاجة اتغيرت: {str(e)}", "error")
         return redirect(url_for('manage_students'))
     finally:
         if conn:
@@ -1935,7 +2007,20 @@ def import_students():
         if wb:
             wb.close()
 
-    return redirect(url_for('manage_students'))
+    return redirect(url_for('import_report'))
+
+
+@app.route("/import_report")
+def import_report():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    try:
+        with open(IMPORT_REPORT_PATH, encoding='utf-8') as f:
+            report = json.load(f)
+    except (OSError, ValueError):
+        flash("مفيش تقرير استيراد محفوظ.", "info")
+        return redirect(url_for('manage_students'))
+    return render_template('import_report.html', report=report)
 
 
 @app.route('/clean_duplicates')
@@ -2096,9 +2181,15 @@ def manage_products():
     conn = get_db()
     c = conn.cursor()
     if request.method == 'POST':
-        c.execute("INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
-                  (request.form['name'], float(request.form['purchase_price']), float(request.form['sale_price']), float(request.form['stock_quantity'])))
-        conn.commit()
+        try:
+            c.execute("INSERT INTO Products (name, purchase_price, sale_price, stock_quantity) VALUES (?, ?, ?, ?)",
+                      (request.form['name'].strip(), float(request.form['purchase_price']), float(request.form['sale_price']), float(request.form['stock_quantity'])))
+            conn.commit()
+            flash("تم إضافة المنتج.", "success")
+        except sqlite3.IntegrityError:
+            flash("فيه منتج بنفس الاسم بالفعل.", "error")
+        conn.close()
+        return redirect(url_for('manage_products'))
     c.execute("SELECT * FROM Products WHERE name NOT IN (?, ?) ORDER BY name", (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT))
     prods = c.fetchall()
     conn.close()
@@ -2118,6 +2209,8 @@ def manage_users():
             flash("تم إضافة المستخدم بنجاح.", "success")
         except sqlite3.IntegrityError:
             flash("اسم المستخدم موجود بالفعل، اختر اسماً آخر.", "error")
+        conn.close()
+        return redirect(url_for('manage_users'))
     c.execute("SELECT * FROM Users WHERE role='employee'")
     emps = c.fetchall()
     conn.close()
@@ -2214,7 +2307,7 @@ def edit_sale_quantity(sale_id):
             # --- (جزء مهم جداً) تحديث إجمالي الوردية بالفرق ---
             price_diff = new_total_price - sale['total_price']
             if sale['shift_id']:
-                adjust_closed_shift_sales(c, sale['shift_id'], price_diff)
+                adjust_closed_shift_sales(c, sale['shift_id'], price_diff, sale['product_id'])
             
             # ج. تحديث البيعة بالقيم الجديدة
             c.execute("UPDATE Sales SET quantity=?, total_price=? WHERE sale_id=?", 
@@ -2266,7 +2359,7 @@ def delete_sale_item(sale_id):
 
         # ب. اخصم قيمة البيعة المحذوفة من إجمالي مبيعات الوردية
         if sale['shift_id']:
-            adjust_closed_shift_sales(c, sale['shift_id'], -sale['total_price'])
+            adjust_closed_shift_sales(c, sale['shift_id'], -sale['total_price'], sale['product_id'])
 
         # ج. احذف البيعة
         c.execute("DELETE FROM Sales WHERE sale_id=?", (sale_id,))
@@ -2309,8 +2402,14 @@ def manage_rooms():
     conn = get_db()
     c = conn.cursor()
     if request.method == 'POST':
-        c.execute("INSERT INTO Rooms (name, hourly_rate) VALUES (?, ?)", (request.form['name'], float(request.form['hourly_rate'])))
-        conn.commit()
+        try:
+            c.execute("INSERT INTO Rooms (name, hourly_rate) VALUES (?, ?)", (request.form['name'].strip(), float(request.form['hourly_rate'])))
+            conn.commit()
+            flash("تم إضافة الأوضة.", "success")
+        except sqlite3.IntegrityError:
+            flash("فيه أوضة بنفس الاسم بالفعل.", "error")
+        conn.close()
+        return redirect(url_for('manage_rooms'))
     c.execute("SELECT * FROM Rooms")
     rooms = c.fetchall()
     conn.close()
@@ -2402,11 +2501,13 @@ def financial_reports():
                  WHERE S.end_time IS NOT NULL AND DATE(S.start_time)=? ORDER BY S.start_time DESC""", (d_str,))
     shifts = c.fetchall()
     
-    c.execute("""SELECT SUM(revenue_hours+revenue_sales) as total_rev, SUM(total_expenses) as total_exp, SUM(total_discounts) as total_disc, SUM(net_cash) as net 
+    c.execute("""SELECT SUM(revenue_hours+revenue_sales) as total_rev, SUM(total_expenses) as total_exp, SUM(total_discounts) as total_disc, SUM(net_cash) as net,
+                        SUM(COALESCE(revenue_catering, 0)) as total_catering
                  FROM Shifts WHERE end_time IS NOT NULL AND DATE(start_time)=?""", (d_str,))
     summ_row = c.fetchone()
     summary = {
         'total_revenue': summ_row['total_rev'] or 0,
+        'total_catering': summ_row['total_catering'] or 0,
         'total_expenses': summ_row['total_exp'] or 0,
         'total_discounts': summ_row['total_disc'] or 0,
         'net_profit': summ_row['net'] or 0
@@ -2702,6 +2803,11 @@ def reservations():
                 conn.commit()
                 flash("✅ تم تأكيد الحجز بنجاح!", "success")
             
+    if request.method == 'POST':
+        # بعد أي عملية نرجع لصفحة الحجوزات بـ GET، عشان زر "رجوع" مايطلعش صفحة Confirm Form Resubmission
+        conn.close()
+        return redirect(url_for('reservations'))
+
     # عرض الحجوزات القادمة فقط
     c.execute("""
         SELECT R.*, RM.name as room_name 
@@ -2858,8 +2964,7 @@ def start_reservation_visit(res_id):
         return redirect(url_for('reservations'))
 
     # 2. شوف العميل ده متسجل عندنا قبل كده ولا لأ؟ (بالتليفون)
-    c.execute("SELECT student_id FROM Students WHERE phone=?", (res['phone'],))
-    student = c.fetchone()
+    student = find_student_by_phone(c, res['phone'])
     
     student_id = None
     if student:
@@ -2867,7 +2972,7 @@ def start_reservation_visit(res_id):
     else:
         # لو مش متسجل، سجله حالاً
         c.execute("INSERT INTO Students (name, phone, college) VALUES (?, ?, ?)", 
-                  (res['client_name'], res['phone'], 'Meeting Client'))
+                  (res['client_name'], clean_phone(res['phone']), 'Meeting Client'))
         student_id = c.lastrowid
     
     # 2.5 التأكد إن القاعة (لو خاصة) مش مشغولة بزيارة تانية دلوقتي
@@ -2957,8 +3062,7 @@ def borrow_book():
         return redirect(url_for('library'))
 
     # 1. هات بيانات الطالب
-    c.execute("SELECT * FROM Students WHERE phone=?", (phone,))
-    student = c.fetchone()
+    student = find_student_by_phone(c, phone)
     if not student:
         flash("هذا الطالب غير مسجل! يجب تسجيله أولاً.", "error")
         return redirect(url_for('library'))
@@ -3105,17 +3209,18 @@ def reset_data_keep_users():
     flash("تم تصفير التعاملات بنجاح! (تم الاحتفاظ بالمستخدمين والطلاب والمنتجات والغرف والكتب والباقات والإعدادات)", "success")
     return redirect(url_for('dashboard'))
 # --- دالة فتح المتصفح ---
-def open_browser():
-    # بنفتح المتصفح على البورت 5001
-    webbrowser.open("http://127.0.0.1:5009/login")
+def open_browser_when_ready():
+    # بنستنى لحد ما السيرفر يبدأ يستقبل فعلاً (بدل وقت ثابت) عشان المتصفح مايفتحش على "refused to connect"
+    for _ in range(120):
+        if server_already_running():
+            break
+        time.sleep(0.5)
+    webbrowser.open(APP_URL + "/dashboard")
 
 # --- نقطة التشغيل الرئيسية ---
 if __name__ == '__main__':
-    # 1. تأخير الفتح 3 ثواني لضمان عمل السيرفر
-    Timer(3, open_browser).start()
-    
-    # 2. تشغيل التطبيق (هام جداً: debug=False)
-    # ده بيمنع الـ PIN وبيمنع الـ Reload اللي بيبوظ الـ EXE
-    app.run(host='127.0.0.1', port=5009, debug=False)
-    #hhhhh
+    threading.Thread(target=open_browser_when_ready, daemon=True).start()
+
+    # debug=False: بيمنع الـ PIN وبيمنع الـ Reload اللي بيبوظ الـ EXE
+    app.run(host='127.0.0.1', port=PORT, debug=False, threaded=True)
     

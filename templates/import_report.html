@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+{% block title %}تقرير الاستيراد{% endblock %}
+
+{% block content %}
+    <h1 class="page-title">تقرير استيراد الطلاب</h1>
+    <p class="page-subtitle">الملف: {{ report.file_name }} — {{ report.time }}</p>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:14px; margin-bottom:24px;">
+        <div class="stat-tile" style="border-right-color: var(--success);">
+            <div class="stat-label">اتضافوا</div>
+            <div class="stat-value">{{ report.inserted }}</div>
+        </div>
+        {% if report.replace_all %}
+        <div class="stat-tile" style="border-right-color: var(--blue);">
+            <div class="stat-label">اتحدثت بياناتهم</div>
+            <div class="stat-value">{{ report.updated }}</div>
+        </div>
+        <div class="stat-tile" style="border-right-color: var(--danger);">
+            <div class="stat-label">اتمسحوا قبل الاستيراد</div>
+            <div class="stat-value">{{ report.removed }}</div>
+        </div>
+        <div class="stat-tile" style="border-right-color: var(--muted);">
+            <div class="stat-label">فضلوا (ليهم زيارات أو باقات)</div>
+            <div class="stat-value">{{ report.kept_with_history }}</div>
+        </div>
+        {% endif %}
+        <div class="stat-tile" style="border-right-color: var(--warning);">
+            <div class="stat-label">ماتضافوش</div>
+            <div class="stat-value">{{ report.problems|length }}</div>
+        </div>
+    </div>
+
+    {% if report.problems %}
+        <div class="panel">
+            <h3 style="margin-top:0;">الصفوف اللي ماتضافتش</h3>
+            <p style="color: var(--muted); margin-top:0;">صلّح الصفوف دي في ملف الـ Excel (رقم الصف هو نفس رقم الصف في Excel)، وارفع الملف تاني: الطلاب اللي اتضافوا خلاص مش هيتكرروا.</p>
+            <div class="table-wrap">
+                <table class="ledger">
+                    <thead>
+                        <tr><th class="num">الصف</th><th>الاسم</th><th>التليفون</th><th>السبب</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for p in report.problems %}
+                        <tr>
+                            <td class="num">{{ p.row }}</td>
+                            <td>{{ p.name or '—' }}</td>
+                            <td class="num">{{ p.phone or '—' }}</td>
+                            <td>{{ p.reason }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="panel" style="background: var(--success-soft);">كل صفوف الملف اتضافت من غير مشاكل.</div>
+    {% endif %}
+
+    <a href="{{ url_for('manage_students') }}" class="btn-back">رجوع لإدارة الطلاب</a>
+{% endblock %}

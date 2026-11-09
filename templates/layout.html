@@ -288,6 +288,26 @@
         }
         .btn-back:hover { border-color: var(--ink); }
 
+        /* زر الرجوع للرئيسية: ثابت أعلى كل صفحة، بدل ما الموظف يدوس "رجوع" في المتصفح كذا مرة */
+        .home-bar {
+            max-width: 1180px;
+            margin: 14px auto 0;
+            padding: 0 24px;
+        }
+        .home-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 18px;
+            background: var(--ink);
+            color: var(--surface);
+            text-decoration: none;
+            border-radius: var(--radius-sm);
+            font-weight: 700;
+            font-size: 0.95em;
+        }
+        .home-btn:hover { background: var(--ink-2); }
+
         /* ---------- الجداول ---------- */
         .table-wrap {
             overflow-x: auto;
@@ -462,11 +482,13 @@
                 </div>
                 <a href="{{ url_for('logout') }}" class="logout-btn">خروج</a>
             {% endif %}
+            {% if session.get('role') == 'manager' %}
             <form action="{{ url_for('shutdown') }}" method="POST" class="shutdown-form"
-                  onsubmit="return confirm('⚠️ هل أنت متأكد أنك تريد إغلاق البرنامج تماماً؟');">
+                  onsubmit="return confirm('⚠️ إغلاق البرنامج هيوقف السيستم لحد ما حد يفتحه تاني. متأكد؟');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit">إغلاق النظام</button>
             </form>
+            {% endif %}
         </div>
     </nav>
 
@@ -479,6 +501,12 @@
             </div>
         {% endif %}
     {% endwith %}
+
+    {% if session.get('user_id') and request.endpoint not in ('dashboard', 'login') %}
+        <div class="home-bar">
+            <a href="{{ url_for('dashboard') }}" class="home-btn">🏠 الرجوع للرئيسية</a>
+        </div>
+    {% endif %}
 
     <div class="content-container">
         {% block content %}

@@ -121,11 +121,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 {# نحتفظ بالكوبون المطبق عشان مايضيعش لما نطبق الخصم اليدوي #}
                 <input type="hidden" name="applied_code" value="{{ discount_info.code or '' }}">
-                {% if session.get('role') == 'manager' %}
-                    <label>تطبيق خصم خاص (مجاملة) - بلا حد أقصى</label>
-                {% else %}
-                    <label>تطبيق خصم خاص (مجاملة) - حتى {{ "%.0f"|format(employee_discount_cap) }} جنيه</label>
-                {% endif %}
+                <label>تطبيق خصم خاص (مجاملة) - مبلغ أو نسبة</label>
 
                 <div style="display: flex; gap: 10px; margin-top: 5px; flex-wrap:wrap;">
                     <select name="manual_type" style="flex: 1; min-width:130px;">

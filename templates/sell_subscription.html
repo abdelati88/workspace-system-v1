@@ -7,9 +7,9 @@
     <!-- 1. البحث عن طالب -->
     <div class="panel">
         <h3>1. اختر الطالب</h3>
-        <form method="POST" style="display:flex; gap:10px; flex-wrap:wrap;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" name="search_query" placeholder="ابحث بالاسم أو الرقم" style="flex:1; min-width:220px;">
+        <form method="GET" action="{{ url_for('sell_subscription') }}" style="display:flex; gap:10px; flex-wrap:wrap;">
+            {% if visit_id %}<input type="hidden" name="visit_id" value="{{ visit_id }}">{% endif %}
+            <input type="text" name="search_query" value="{{ search_query or '' }}" placeholder="ابحث بالاسم أو الرقم" style="flex:1; min-width:220px;">
             <button type="submit" class="btn btn-primary">بحث</button>
         </form>
 

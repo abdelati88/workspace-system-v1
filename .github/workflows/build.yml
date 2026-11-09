@@ -26,7 +26,7 @@ jobs:
         pip install pyinstaller
 
     - name: Build TaskWorkspace.exe
-      run: pyinstaller --noconfirm --onefile --name TaskWorkspace --add-data "templates;templates" --add-data "Static;static" app.py
+      run: pyinstaller --noconfirm --onefile --noconsole --name TaskWorkspace --add-data "templates;templates" --add-data "Static;static" app.py
 
     - name: Smoke test (start the exe and hit it)
       shell: pwsh
@@ -55,6 +55,16 @@ jobs:
         # Full work cycle against the real exe: shift, student, check-in, sale, payment, close - and verify the totals
         python tests/smoke_exe.py dist
         if ($LASTEXITCODE -ne 0) { throw 'Full EXE smoke test failed' }
+
+        # No console window: output goes to workspace.log next to the exe
+        if (-not (Test-Path 'dist\workspace.log')) { throw 'workspace.log was not created' }
+
+        # Launching the exe again while it runs must not start a second server or kill the first one
+        $second = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+        if (-not $second.WaitForExit(30000)) { throw 'Second launch did not exit' }
+        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:5009/login' -UseBasicParsing
+        if ($r.StatusCode -ne 200) { throw 'Server stopped after a second launch' }
+        if ((Get-Process TaskWorkspace -ErrorAction SilentlyContinue | Measure-Object).Count -lt 1) { throw 'Server process is gone' }
 
         Get-Process TaskWorkspace -ErrorAction SilentlyContinue | Stop-Process -Force
         Write-Host 'Smoke test passed'

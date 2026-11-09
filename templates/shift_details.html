@@ -28,7 +28,7 @@
             </div>
         </div>
         <div style="background: var(--success); border-radius: var(--radius); padding: 12px 22px; text-align: center; min-width: 140px;">
-            <div style="font-size: 11px; color: var(--success-soft);">💰 صافي الدرج</div>
+            <div style="font-size: 11px; color: var(--success-soft);">💰 صافي الوردية</div>
             <div style="font-size: 28px; font-weight: bold; font-variant-numeric: tabular-nums;">{{ "%.2f"|format(shift.net_cash) }} ج</div>
         </div>
     </div>
@@ -40,7 +40,7 @@
             <div class="stat-value" style="font-size: 1.2em;">{{ "%.2f"|format(shift.revenue_hours) }} ج</div>
         </div>
         <div class="stat-tile" style="border-right-color: var(--success);">
-            <div class="stat-label">+ إيراد المبيعات</div>
+            <div class="stat-label">+ {% if shift.revenue_catering is none %}إيراد المبيعات{% else %}الباقات وتأمين الكتب{% endif %}</div>
             <div class="stat-value" style="font-size: 1.2em;">{{ "%.2f"|format(shift.revenue_sales) }} ج</div>
         </div>
         <div class="stat-tile" style="border-right-color: var(--danger);">
@@ -52,9 +52,15 @@
             <div class="stat-value" style="font-size: 1.2em;">{{ "%.2f"|format(shift.total_discounts) }} ج</div>
         </div>
         <div class="stat-tile" style="border-right-color: var(--blue);">
-            <div class="stat-label">💳 صافي الدرج</div>
+            <div class="stat-label">💳 صافي الوردية{% if shift.revenue_catering is not none %} (بدون الكافيتريا){% endif %}</div>
             <div class="stat-value" style="font-size: 1.2em;">{{ "%.2f"|format(shift.net_cash) }} ج</div>
         </div>
+        {% if shift.revenue_catering is not none %}
+        <div class="stat-tile" style="border-right-color: var(--gold); background: var(--paper);">
+            <div class="stat-label">☕ الكافيتريا (لوحدها)</div>
+            <div class="stat-value" style="font-size: 1.2em;">{{ "%.2f"|format(shift.revenue_catering) }} ج</div>
+        </div>
+        {% endif %}
     </div>
 
     {# ─── Visits Table ─── #}
@@ -172,7 +178,7 @@
     <div class="no-print" style="display:flex;gap:12px;margin-top:10px;margin-bottom:30px;">
         <button onclick="window.print()" class="btn btn-primary">🖨️ طباعة / حفظ PDF</button>
 
-        <a href="javascript:history.back()" class="btn btn-ghost">← رجوع</a>
+        <a href="{{ url_for('financial_reports') }}" class="btn btn-ghost">← رجوع</a>
     </div>
 
 </div>

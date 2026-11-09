@@ -5,8 +5,7 @@
 <h1 class="page-title">تسجيل دخول طالب</h1>
 
 <div class="panel" style="max-width: 560px; margin: 0 auto;">
-    <form action="{{ url_for('check_in') }}" method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <form action="{{ url_for('check_in') }}" method="GET">
 
         <div class="form-group">
             <label for="search_query">ابحث بالاسم أو رقم التليفون</label>
@@ -29,7 +28,7 @@
 
         <button type="submit" class="btn btn-success btn-lg btn-block">تسجيل دخول</button>
 
-        <a href="javascript:history.back()" class="btn-back" style="display:block; text-align:center;">رجوع للصفحة السابقة</a>
+        <a href="{{ url_for('dashboard') }}" class="btn-back" style="display:block; text-align:center;">رجوع للصفحة السابقة</a>
     </form>
 </div>
 {% endblock %}

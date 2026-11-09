@@ -33,10 +33,17 @@
     <div class="no-print" style="text-align: center; padding: 30px;">
         <h1 style="color: var(--success);">✅ تم إنهاء الوردية بنجاح</h1>
 
-        <div class="panel" style="display: inline-block; background: var(--info-soft); border-color: rgba(43,95,160,0.25);">
-            <h3 style="margin:0; color: var(--muted);">صافي الدرج</h3>
-            <h1 style="color: var(--blue); font-size: 3em; margin: 5px 0;">{{ "%.2f"|format(data.net_cash) }} ج</h1>
+        <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+            <div class="panel" style="display: inline-block; background: var(--success-soft); border-color: rgba(47,111,78,0.25);">
+                <h3 style="margin:0; color: var(--muted);">صافي الوردية (بدون الكافيتريا)</h3>
+                <h1 style="color: var(--success); font-size: 3em; margin: 5px 0;">{{ "%.2f"|format(data.net_cash) }} ج</h1>
+            </div>
+            <div class="panel" style="display: inline-block; background: var(--info-soft); border-color: rgba(43,95,160,0.25);">
+                <h3 style="margin:0; color: var(--muted);">☕ الكافيتريا (لوحدها)</h3>
+                <h1 style="color: var(--blue); font-size: 3em; margin: 5px 0;">{{ "%.2f"|format(data.catering) }} ج</h1>
+            </div>
         </div>
+        <p style="color: var(--muted);">إجمالي الفلوس في الدرج (الاتنين مع بعض): <strong>{{ "%.2f"|format(data.drawer_total) }} ج</strong></p>
 
         <div class="table-wrap" style="max-width: 640px; margin: 20px auto;">
         <table class="ledger">
@@ -53,8 +60,8 @@
                 <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.rev_private) }} ج</td>
             </tr>
             <tr>
-                <td>☕ مبيعات الكافيتريا</td>
-                <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.rev_sales) }} ج</td>
+                <td>🎫 مبيعات الباقات وتأمين الكتب</td>
+                <td class="num" style="color: var(--success);">{{ "%.2f"|format(data.main_sales) }} ج</td>
             </tr>
             <tr>
                 <td>💸 مصروفات</td>
@@ -63,6 +70,14 @@
             <tr>
                 <td>🏷️ خصومات</td>
                 <td class="num" style="color: var(--warning);">- {{ "%.2f"|format(data.discounts) }} ج</td>
+            </tr>
+            <tr style="background: var(--paper); font-weight: bold;">
+                <td>💰 صافي الوردية</td>
+                <td class="num">{{ "%.2f"|format(data.net_cash) }} ج</td>
+            </tr>
+            <tr>
+                <td>☕ الكافيتريا (منفصلة)</td>
+                <td class="num" style="color: var(--blue);">{{ "%.2f"|format(data.catering) }} ج</td>
             </tr>
         </table>
         </div>
@@ -98,8 +113,8 @@
                     <td style="text-align: right;">{{ "%.2f"|format(data.rev_private) }}</td>
                 </tr>
                 <tr>
-                    <td style="text-align: left;">Sales (+)</td>
-                    <td style="text-align: right;">{{ "%.2f"|format(data.rev_sales) }}</td>
+                    <td style="text-align: left;">Packages (+)</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(data.main_sales) }}</td>
                 </tr>
                 {% if data.expenses > 0 %}
                 <tr>
@@ -118,8 +133,12 @@
             <hr style="border-top: 2px solid black;">
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
-                <span style="font-weight: bold; font-size: 16px;">NET CASH:</span>
+                <span style="font-weight: bold; font-size: 16px;">NET (no catering):</span>
                 <span style="font-weight: bold; font-size: 20px;">{{ "%.2f"|format(data.net_cash) }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+                <span style="font-weight: bold; font-size: 16px;">CATERING:</span>
+                <span style="font-weight: bold; font-size: 20px;">{{ "%.2f"|format(data.catering) }}</span>
             </div>
 
             <hr style="border-top: 2px solid black;">

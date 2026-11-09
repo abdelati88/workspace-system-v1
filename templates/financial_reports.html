@@ -21,15 +21,19 @@
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:30px;">
         <div class="stat-tile" style="flex:1; min-width:200px; text-align:center;">
             <div class="stat-value">{{ "%.2f"|format(summary.total_revenue) }} جنيه</div>
-            <div class="stat-label">إجمالي الإيرادات (لليوم)</div>
+            <div class="stat-label">إجمالي الإيرادات (من غير الكافيتريا)</div>
         </div>
         <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--danger);">
             <div class="stat-value">{{ "%.2f"|format(summary.total_expenses) }} جنيه</div>
             <div class="stat-label">إجمالي المصروفات (لليوم)</div>
         </div>
-        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--blue);">
+        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--success);">
             <div class="stat-value">{{ "%.2f"|format(summary.net_profit) }} جنيه</div>
-            <div class="stat-label">صافي الدرج (لليوم)</div>
+            <div class="stat-label">صافي اليوم (بدون الكافيتريا)</div>
+        </div>
+        <div class="stat-tile" style="flex:1; min-width:200px; text-align:center; border-right-color: var(--blue);">
+            <div class="stat-value">{{ "%.2f"|format(summary.total_catering) }} جنيه</div>
+            <div class="stat-label">☕ الكافيتريا (لوحدها)</div>
         </div>
     </div>
 
@@ -45,9 +49,10 @@
                     <th>وقت البدء</th>
                     <th>وقت الإنهاء</th>
                     <th class="num">إيراد الساعات</th>
-                    <th class="num">إيراد المبيعات</th>
+                    <th class="num">الباقات</th>
                     <th class="num">المصروفات</th>
-                    <th class="num">صافي الدرج</th>
+                    <th class="num">صافي الوردية</th>
+                    <th class="num">الكافيتريا</th>
                 </tr>
             </thead>
             <tbody>
@@ -67,11 +72,15 @@
                         <td class="num">{{ "%.2f"|format(shift.revenue_sales) }} ج</td>
                         <td class="num">{{ "%.2f"|format(shift.total_expenses) }} ج</td>
                         <td class="num">{{ "%.2f"|format(shift.net_cash) }} ج</td>
+                        <td class="num">
+                            {% if shift.revenue_catering is none %}<span style="color: var(--muted);" title="وردية قديمة قبل فصل الكافيتريا: الكافيتريا محسوبة جوه المبيعات والصافي">ضمن الصافي</span>
+                            {% else %}{{ "%.2f"|format(shift.revenue_catering) }} ج{% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="8" style="text-align: center; color: var(--muted);">
+                        <td colspan="9" style="text-align: center; color: var(--muted);">
                             لا يوجد أي ورديات مغلقة لهذا اليوم.
                         </td>
                     </tr>
@@ -80,7 +89,7 @@
         </table>
     </div>
 
-    <a href="javascript:history.back()" class="btn-back">
+    <a href="{{ url_for('dashboard') }}" class="btn-back">
         رجوع
     </a>
 

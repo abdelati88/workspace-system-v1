@@ -84,12 +84,15 @@ status, _ = get('/shift_summary_preview')
 check('shift summary opens', status == 200)
 post('/end_shift')
 
-shift = db_one("SELECT end_time, revenue_hours, revenue_sales, net_cash FROM Shifts WHERE shift_id=?", shift_id)
+shift = db_one("SELECT end_time, revenue_hours, revenue_catering, net_cash FROM Shifts WHERE shift_id=?", shift_id)
 time_cost = db_one("SELECT total_cost FROM Visits WHERE visit_id=?", visit_id)[0]
-expected_net = time_cost + 2 * tea_price
 check('shift closed', shift[0] is not None)
-check('shift totals correct', shift[1] == time_cost and shift[2] == 2 * tea_price and shift[3] == expected_net,
-      f'hours={shift[1]} sales={shift[2]} net={shift[3]} expected_net={expected_net}')
+# الكافيتريا لوحدها ومش داخلة في صافي الوردية
+check('shift totals correct (catering separate from net)',
+      shift[1] == time_cost and shift[2] == 2 * tea_price and shift[3] == time_cost,
+      f'hours={shift[1]} catering={shift[2]} net={shift[3]} expected_net={time_cost}')
+status, report = get(f'/shift_report/{shift_id}')
+check('shift report page opens', status == 200 and 'الكافيتريا' in report)
 
 pages = ['/dashboard', '/check_in', '/check_out_list', '/select_sale_recipient', '/add_sale/0', '/log_expense',
          '/sell_subscription', '/manage_settings', '/manage_students', '/manage_products', '/manage_users',
