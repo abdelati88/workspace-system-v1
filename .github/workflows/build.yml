@@ -26,6 +26,9 @@ jobs:
         pip install pyinstaller
 
     - name: Run system and regression tests
+      env:
+        PYTHONUTF8: '1'
+        PYTHONIOENCODING: utf-8
       run: |
         python tests/test_system.py
         if ($LASTEXITCODE -ne 0) { throw 'System tests failed' }
