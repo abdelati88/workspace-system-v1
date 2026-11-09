@@ -30,6 +30,12 @@
         </div>
     </div>
 
+    {% if report.aborted %}
+        <div class="panel">تم إلغاء الاستبدال بالكامل؛ لم يتم حذف أو تعديل أي طالب. أصلح أخطاء الملف، وتأكد إنه يحتوي على طلاب، ثم أعد الاستيراد.</div>
+    {% endif %}
+    {% if report.backup_file %}
+        <div class="panel">نسخة احتياطية قبل الاستبدال محفوظة بجوار البرنامج في: backups/{{ report.backup_file }}</div>
+    {% endif %}
     {% if report.problems %}
         <div class="panel">
             <h3 style="margin-top:0;">الصفوف اللي ماتضافتش</h3>
@@ -52,7 +58,7 @@
                 </table>
             </div>
         </div>
-    {% else %}
+    {% elif not report.aborted %}
         <div class="panel" style="background: var(--success-soft);">كل صفوف الملف اتضافت من غير مشاكل.</div>
     {% endif %}
 

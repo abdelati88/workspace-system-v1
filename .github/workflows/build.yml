@@ -25,6 +25,13 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
+    - name: Run system and regression tests
+      run: |
+        python tests/test_system.py
+        if ($LASTEXITCODE -ne 0) { throw 'System tests failed' }
+        python -m unittest discover -s tests -p "test_regressions.py" -v
+        if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
+
     - name: Build TaskWorkspace.exe
       run: pyinstaller --noconfirm --onefile --noconsole --name TaskWorkspace --add-data "templates;templates" --add-data "Static;static" app.py
 
@@ -70,7 +77,6 @@ jobs:
         Write-Host 'Smoke test passed'
 
     - name: Upload TaskWorkspace.exe
-      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: TaskWorkspace-Windows

@@ -10,7 +10,7 @@ import re
 import unicodedata
 import sqlite3
 import datetime
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, has_request_context
 from werkzeug.security import check_password_hash, generate_password_hash
 import urllib.parse
 import secrets
@@ -123,12 +123,72 @@ def clean_phone(value):
         return '0' + core
     return digits
 
+class RequestConnection(sqlite3.Connection):
+    """One atomic transaction per POST, including all helper calls.
+
+    Legacy route commit()/close() calls are deferred until a successful response.
+    BEGIN IMMEDIATE serializes writers BEFORE reading balances/visit/shift state.
+    An exception or explicit rollback cancels the entire operation.
+    """
+    failed = False
+    save_requested = False
+
+    def commit(self):
+        self.save_requested = True
+
+    def close(self):
+        pass
+
+    def rollback(self):
+        self.failed = True
+        super().rollback()
+
+
 def get_db():
-    conn = sqlite3.connect(DATABASE)
+    managed = has_request_context() and request.method == 'POST'
+    if managed and 'write_db' in g:
+        return g.write_db
+    conn = sqlite3.connect(DATABASE, timeout=15,
+                           factory=RequestConnection if managed else sqlite3.Connection)
     conn.row_factory = sqlite3.Row
     conn.create_function('norm_name', 1, normalize_name, deterministic=True)
     conn.create_function('norm_phone', 1, normalize_phone, deterministic=True)
+    if managed:
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+        except Exception:
+            sqlite3.Connection.close(conn)
+            raise
+        g.write_db = conn
     return conn
+
+
+@app.after_request
+def finish_write_transaction(response):
+    conn = g.get('write_db')
+    if conn is not None:
+        if response.status_code >= 400 or conn.failed or not conn.save_requested:
+            sqlite3.Connection.rollback(conn)
+        else:
+            sqlite3.Connection.commit(conn)
+    return response
+
+
+@app.teardown_request
+def close_request_database(error=None):
+    conn = g.pop('write_db', None)
+    if conn is not None:
+        # Also covers unhandled exceptions (including TESTING=True).
+        try:
+            sqlite3.Connection.rollback(conn)
+        finally:
+            sqlite3.Connection.close(conn)
+
+
+def rollback_request_database():
+    conn = g.get('write_db')
+    if conn is not None:
+        conn.rollback()
 
 def looks_like_phone(value):
     return bool(re.fullmatch(r'[\d\s+\-]+', str(value or '').strip())) and len(phone_digits(value)) >= 4
@@ -191,6 +251,7 @@ def no_store_pages(response):
 # =========================================================
 @app.errorhandler(ValueError)
 def handle_bad_input(e):
+    rollback_request_database()
     app.logger.exception("Invalid input on %s", request.path)
     flash("⚠️ قيمة غير صحيحة في أحد الحقول (أرقام أو تاريخ). راجع البيانات وحاول مرة أخرى.", "error")
     target = request.referrer
@@ -204,6 +265,14 @@ def handle_bad_input(e):
 _LOGIN_ATTEMPTS = {}
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT_SECONDS = 60
+
+@app.errorhandler(sqlite3.Error)
+def handle_database_error(error):
+    rollback_request_database()
+    app.logger.exception("Database operation failed on %s", request.path)
+    flash("تعذر حفظ العملية، ولم يتم حفظ أي جزء منها. حاول مرة أخرى؛ ولو استمرت المشكلة راجع المدير.", "error")
+    return redirect(url_for('dashboard'))
+
 
 def is_login_locked(username):
     entry = _LOGIN_ATTEMPTS.get(username)
@@ -281,7 +350,13 @@ def get_internal_product_id(c, name):
 # صنف كافيتريا → عمود الكافيتريا بس (مش داخل في الصافي). الباقات/التأمين → المبيعات والصافي.
 # ورديات اتقفلت قبل فصل الكافيتريا (revenue_catering فاضي) كانت الكافيتريا جوه الصافي، فبتتعدل زي زمان.
 # =========================================================
-def adjust_closed_shift_sales(c, shift_id, amount, product_id):
+def adjust_closed_shift_sales(c, shift_id, amount, product_id, visit_id=None):
+    if visit_id is not None:
+        c.execute("SELECT check_out_time FROM Visits WHERE visit_id=?", (visit_id,))
+        visit = c.fetchone()
+        if not visit or not visit['check_out_time']:
+            # Unpaid visit items were never included in this closed shift.
+            return
     c.execute("SELECT name FROM Products WHERE product_id = ?", (product_id,))
     row = c.fetchone()
     is_internal = bool(row) and row['name'] in (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT)
@@ -324,6 +399,8 @@ def run_startup_migrations():
     _ensure_column(c, 'Visits', 'reservation_id', 'reservation_id INTEGER REFERENCES Reservations(reservation_id)')
     # إجمالي الكافيتريا لكل وردية (منفصل عن الصافي). الورديات القديمة بيفضل فاضي = الكافيتريا كانت جوه الصافي
     _ensure_column(c, 'Shifts', 'revenue_catering', 'revenue_catering REAL')
+    _ensure_column(c, 'Sales', 'unit_price', 'unit_price REAL')
+    _ensure_column(c, 'Sales', 'free_limit', 'free_limit INTEGER')
 
     # جدول الإعدادات (حد كروت النت المجانية + أسعار الشرائح) - لازم يكون موجود
     # دايماً، حتى لو الداتا بيز اتعملت قبل ما الجدول ده يتضاف للسكيما الرئيسية
@@ -701,7 +778,7 @@ def room_view(room_id):
 
 
 
-@app.route("/start_shift", methods=['GET','POST'])
+@app.route("/start_shift", methods=['POST'])
 def start_shift():
     if 'user_id' not in session: return redirect(url_for('login'))
     user_id = session.get('user_id')
@@ -1007,10 +1084,8 @@ def perform_check_in():
                     dt_check_in = datetime.datetime.combine(parsed_date, parsed_time)
                     print(f">>> DEBUG: Explicit manual_date '{manual_date}' provided. Bypassing midnight boundary.")
                 except ValueError:
-                    print(f">>> DEBUG: Invalid manual_date format '{manual_date}'. Falling back to now.date()")
-                    dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
-                    if dt_check_in > now:
-                        dt_check_in -= datetime.timedelta(days=1)
+                    flash("تاريخ الدخول غير صحيح.", "error")
+                    return redirect(url_for('select_room', student_id=sid))
             else:
                 dt_check_in = datetime.datetime.combine(now.date(), parsed_time)
                 
@@ -1019,6 +1094,9 @@ def perform_check_in():
                     print(f">>> DEBUG: Future time '{manual_time}' detected with no manual_date. Assuming yesterday.")
                     dt_check_in -= datetime.timedelta(days=1)
                 
+            if dt_check_in > now:
+                flash("وقت الدخول لا يمكن أن يكون في المستقبل.", "error")
+                return redirect(url_for('select_room', student_id=sid))
             check_in_time = dt_check_in.strftime("%Y-%m-%d %H:%M:%S")
             print(f">>> DEBUG: Using MANUAL check_in_time: '{check_in_time}'")
         else:
@@ -1040,8 +1118,15 @@ def perform_check_in():
         flash("هذا الطالب متواجد بالفعل في النظام ولم يسجل خروج", "error")
         return redirect(url_for('check_in'))
 
+    c.execute("SELECT 1 FROM Students WHERE student_id=?", (sid,))
+    if not c.fetchone():
+        flash("الطالب غير موجود.", "error")
+        return redirect(url_for('check_in'))
     c.execute("SELECT name FROM Rooms WHERE room_id=?", (rid,))
     room_row = c.fetchone()
+    if not room_row:
+        flash("الغرفة غير موجودة.", "error")
+        return redirect(url_for('select_room', student_id=sid))
     if room_row and is_exclusive_room(room_row['name']) and room_has_open_visit(c, rid):
         conn.close()
         flash(f"غرفة {room_row['name']} مشغولة حالياً بشخص آخر.", "error")
@@ -1068,138 +1153,91 @@ def check_out_list():
     return render_template('check_out_list.html', active_visits=visits)
 
 # --- الفواتير والدفع (مع الكوبونات والاشتراكات) ---
+def cash_discounts(c, visit, time_cost, coupon_code, manual_type, manual_value, now):
+    info = {'code': None, 'amount': 0.0, 'coupon_id': None}
+    if visit['reservation_id']:
+        c.execute("SELECT * FROM Reservations WHERE reservation_id=?", (visit['reservation_id'],))
+        reservation = c.fetchone()
+        if reservation and reservation['discount_type'] in ('fixed', 'percentage'):
+            value = reservation['discount_value'] or 0
+            amount = time_cost * value / 100 if reservation['discount_type'] == 'percentage' else value
+            info.update(code='عرض حجز', amount=max(0, min(amount, time_cost)))
+    if info['amount'] == 0 and coupon_code:
+        c.execute("SELECT * FROM Coupons WHERE code=?", (coupon_code.strip().upper(),))
+        coupon = c.fetchone()
+        if (coupon and not coupon['is_used']
+                and (not coupon['student_id'] or coupon['student_id'] == visit['student_id'])
+                and (not coupon['expiry_date'] or
+                     datetime.datetime.strptime(coupon['expiry_date'], '%Y-%m-%d').date() >= now.date())):
+            value = coupon['discount_value']
+            amount = time_cost * value / 100 if coupon['discount_type'] == 'percentage' else value
+            info.update(code=coupon['code'], amount=max(0, min(amount, time_cost)), coupon_id=coupon['coupon_id'])
+    value = float(manual_value or 0)
+    if not math.isfinite(value):
+        raise ValueError('Discount must be finite')
+    amount = time_cost * value / 100 if manual_type == 'percentage' else value
+    manual = max(0, min(amount, max(0, time_cost - info['amount'])))
+    return info, manual
+
+
 @app.route("/show_invoice/<int:visit_id>")
 def show_invoice(visit_id):
-    if 'user_id' not in session: return redirect(url_for('login'))
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     conn = get_db()
-    c = conn.cursor()
-    
-    # 1. جلب بيانات الزيارة والغرفة والطالب
-    c.execute("""SELECT V.*, S.name, S.phone, R.name as room_name, R.hourly_rate
-                 FROM Visits V 
-                 JOIN Students S ON V.student_id = S.student_id
-                 JOIN Rooms R ON V.room_id = R.room_id
-                 WHERE V.visit_id=?""", (visit_id,))
-    visit_data = c.fetchone()
-    
-    if not visit_data: return redirect(url_for('dashboard'))
-    
-    # 2. حساب الوقت والتكلفة
-    check_in = datetime.datetime.strptime(visit_data['check_in_time'], "%Y-%m-%d %H:%M:%S")
-    now = datetime.datetime.now()
-    duration_hours = (now - check_in).total_seconds() / 3600.0
-    
-    # استخدام دالة التسعير الجديدة (حسب نوع الغرفة)
-    time_cost = calculate_dynamic_cost(duration_hours, visit_data['room_name'], visit_data['hourly_rate'])
-    
-    # 3. حساب المبيعات
-    # 3. حساب المبيعات (تفصيلي عشان نعرف نمسح)
-    # 3. حساب المبيعات (تعديل: جلب التفاصيل عشان نعرف نمسح)
-    c.execute("""SELECT S.sale_id, P.name, S.quantity, S.total_price 
-                 FROM Sales S JOIN Products P ON S.product_id=P.product_id 
-                 WHERE S.visit_id=?""", (visit_id,))
-    sales_items = c.fetchall()
-    
-    # حساب الإجمالي يدوياً لأننا شيلنا التجميع من الداتا بيز
-    sales_total = sum(s['total_price'] for s in sales_items)
-    # 4. البحث عن اشتراك نشط
-    c.execute("""
-        SELECT * FROM StudentSubscriptions
-        WHERE student_id = ? AND is_active = 1 AND remaining_hours >= ? AND end_date >= ?
-        ORDER BY end_date ASC
-    """, (visit_data['student_id'], duration_hours, now.strftime("%Y-%m-%d")))
-    active_sub = c.fetchone()
-    
-    # --- بداية التعديل الخاص بالخصومات ---
-    
-    # أ. استلام الخصم اليدوي من الرابط (لو موجود)
-   # --- بداية التعديل الخاص بالخصومات ---
-    
-    # أ. استلام الخصم اليدوي من الرابط
-    manual_disc_type = request.args.get('m_type')
-    manual_disc_value = float(request.args.get('m_value', 0))
+    try:
+        c = conn.cursor()
+        c.execute("""SELECT V.*, S.name, S.phone, R.name as room_name, R.hourly_rate
+                     FROM Visits V JOIN Students S ON V.student_id=S.student_id
+                     JOIN Rooms R ON V.room_id=R.room_id WHERE V.visit_id=?""", (visit_id,))
+        visit_data = c.fetchone()
+        if not visit_data:
+            return redirect(url_for('dashboard'))
+        closed = bool(visit_data['check_out_time'])
+        now = datetime.datetime.now()
+        active_sub = None
+        manual_type = request.args.get('m_type', 'fixed')
+        manual_value = request.args.get('m_value', 0)
+        if closed:
+            # A receipt is a historical record, not a new quote at today's prices.
+            duration = visit_data['duration_hours'] or 0
+            time_cost = visit_data['total_cost'] or 0
+            total_discount = visit_data['total_discount'] or 0
+            manual = visit_data['manual_discount'] or 0
+            info = {'code': 'خصم محفوظ', 'amount': max(0, total_discount - manual)}
+            manual_value = 0
+        else:
+            start = datetime.datetime.strptime(visit_data['check_in_time'], '%Y-%m-%d %H:%M:%S')
+            duration = (now - start).total_seconds() / 3600
+            if duration < 0:
+                flash("تاريخ دخول الزيارة في المستقبل. راجع وقت الجهاز وبيانات الدخول قبل التحصيل.", "error")
+                return redirect(url_for('dashboard'))
+            time_cost = calculate_dynamic_cost(duration, visit_data['room_name'], visit_data['hourly_rate'])
+            info, manual = cash_discounts(c, visit_data, time_cost,
+                                         request.args.get('applied_code'), manual_type, manual_value, now)
+            total_discount = info['amount'] + manual
+            c.execute("""SELECT * FROM StudentSubscriptions WHERE student_id=? AND is_active=1
+                         AND remaining_hours>=? AND end_date>=? ORDER BY end_date ASC""",
+                      (visit_data['student_id'], duration, now.strftime('%Y-%m-%d')))
+            active_sub = c.fetchone()
+        c.execute("""SELECT S.sale_id, P.name, S.quantity, S.total_price FROM Sales S
+                     JOIN Products P ON S.product_id=P.product_id WHERE S.visit_id=?""", (visit_id,))
+        sales = c.fetchall()
+        sales_total = sum(s['total_price'] for s in sales)
+        details = dict(visit_id=visit_id, room_name=visit_data['room_name'],
+                       hourly_rate=visit_data['hourly_rate'], check_in_time=visit_data['check_in_time'],
+                       duration_hours=duration, total_time_cost=time_cost, total_sales_cost=sales_total,
+                       grand_total=time_cost + sales_total,
+                       final_total=max(0, time_cost + sales_total - total_discount),
+                       payment_method=visit_data['payment_method'])
+        return render_template('invoice.html', student=visit_data, visit_details=details,
+                               sales_items=sales, discount_info=info, manual_discount_amount=manual,
+                               manual_disc_type=manual_type, manual_disc_value=manual_value,
+                               active_sub=active_sub, is_closed=closed)
+    finally:
+        conn.close()
 
-    discount_info = {"code": None, "amount": 0}
-    
-    # حساب تكلفة الوقت قبل الخصومات الأخرى لتطبيق النسبة عليها
-    # ملاحظة: الخصومات كلها بتطبق على تكلفة الوقت (Time Cost) فقط
-    
-    # حساب قيمة الخصم اليدوي
-    manual_discount_amount = 0
-    if manual_disc_value > 0:
-        if manual_disc_type == 'percentage':
-            manual_discount_amount = time_cost * (manual_disc_value / 100.0)
-        else: # fixed
-            manual_discount_amount = manual_disc_value
-        manual_discount_amount = min(manual_discount_amount, time_cost) # لا يتجاوز تكلفة الوقت
 
-    # هنا هنمرر المبلغ النهائي المحسوب وليس القيمة الأصلية
-    # عشان نعرف نعرضه صح في الفاتورة لو طلب نسبة
-    manual_discount_display = manual_discount_amount
-    # ---------------------------------------------
-    
-    # ب. التحقق من خصم الحجز المسبق (أولوية)
-    
-    # ب. التحقق من خصم الحجز المسبق (أولوية)
-    # ملاحظة: الـ "in" على sqlite3.Row بتدور في القيم مش أسماء الأعمدة، فلازم نقرأ العمود مباشرة
-    if visit_data['reservation_id']:
-        c.execute("SELECT * FROM Reservations WHERE reservation_id=?", (visit_data['reservation_id'],))
-        res_data = c.fetchone()
-        if res_data and res_data['discount_type'] != 'none':
-            if res_data['discount_type'] == 'percentage':
-                disc_val = time_cost * (res_data['discount_value'] / 100.0)
-            else:
-                disc_val = res_data['discount_value']
-            discount_info = {"code": "عرض حجز", "amount": min(disc_val, time_cost)}
-
-    # ج. لو مفيش خصم حجز، نشوف الكوبون
-    if discount_info['amount'] == 0:
-        applied_code = request.args.get('applied_code')
-        if applied_code and not request.args.get('error_message'):
-            c.execute("SELECT * FROM Coupons WHERE code=?", (applied_code,))
-            cp = c.fetchone()
-            if cp:
-                if cp['discount_type'] == 'percentage':
-                    disc_val = time_cost * (cp['discount_value'] / 100.0)
-                else:
-                    disc_val = cp['discount_value']
-                discount_info = {"code": cp['code'], "amount": min(disc_val, time_cost)}
-                flash("تم تطبيق الكوبون", "success")
-
-    conn.close()
-    
-    # د. الجمع النهائي للخصومات (كوبون + يدوي)
-    # نفس قاعدة الدفع الفعلي: اليدوي مايعديش الباقي من تكلفة الوقت بعد الحجز/الكوبون
-    manual_discount_amount = min(manual_discount_amount, max(0, time_cost - discount_info['amount']))
-    total_discount = discount_info['amount'] + manual_discount_amount
-    
-    grand_total_before = time_cost + sales_total
-    final_total = max(0, grand_total_before - total_discount)
-
-    visit_details = {
-        'visit_id': visit_id,
-        'room_name': visit_data['room_name'],
-        'hourly_rate': visit_data['hourly_rate'],
-        'check_in_time': visit_data['check_in_time'],
-        'duration_hours': duration_hours,
-        'total_time_cost': time_cost,
-        'total_sales_cost': sales_total,
-        'grand_total': grand_total_before,
-        'final_total': final_total,
-        'payment_method': visit_data['payment_method'] # عشان العرض في الفاتورة لو اتقفلت
-    }
-    
-    return render_template('invoice.html', 
-                           student=visit_data, 
-                           visit_details=visit_details, 
-                           sales_items=sales_items,
-                           discount_info=discount_info,
-                           # تمرير قيمة الخصم المحسوبة بدلاً من القيمة الخام
-                           manual_discount_amount=manual_discount_amount, 
-                           # تمرير نوع وقيمة الخصم اليدوي الأصلية للعرض في الفورم لو كان موجود
-                           manual_disc_type=manual_disc_type,
-                           manual_disc_value=manual_disc_value,
-                           active_sub=active_sub)
 @app.route("/apply_coupon/<int:visit_id>", methods=['POST'])
 def apply_coupon(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -1229,6 +1267,8 @@ def confirm_payment(visit_id):
     if 'user_id' not in session: return redirect(url_for('login'))
     
     payment_method = request.form.get('payment_method', 'cash')
+    if payment_method not in ('cash', 'subscription'):
+        raise ValueError('Unknown payment method')
     coupon_code = request.form.get('applied_coupon_code')
     # الخصم اليدوي: بيتحسب من نوعه وقيمته هنا في السيرفر (مش من قيمة جاهزة جاية من المتصفح)
     manual_disc_type = request.form.get('manual_disc_type', 'fixed')
@@ -1236,6 +1276,8 @@ def confirm_payment(visit_id):
         manual_disc_value = float(request.form.get('manual_disc_value', 0))
     except ValueError:
         manual_disc_value = 0
+    if not math.isfinite(manual_disc_value):
+        raise ValueError('Discount must be finite')
     manual_disc_value = max(0, manual_disc_value)
 
     conn = get_db()
@@ -1269,6 +1311,10 @@ def confirm_payment(visit_id):
     check_in = datetime.datetime.strptime(visit['check_in_time'], "%Y-%m-%d %H:%M:%S")
     out_time = datetime.datetime.now()
     duration = (out_time - check_in).total_seconds() / 3600.0
+    if duration < 0:
+        conn.close()
+        flash("لا يمكن تحصيل زيارة بتاريخ دخول مستقبلي. راجع وقت الجهاز وبيانات الدخول.", "error")
+        return redirect(url_for('dashboard'))
     final_time_cost = calculate_dynamic_cost(duration, visit['room_name'], visit['hourly_rate'])
     
     # تهيئة المتغيرات
@@ -1288,52 +1334,17 @@ def confirm_payment(visit_id):
             c.execute("UPDATE StudentSubscriptions SET remaining_hours=? WHERE sub_id=?", (new_bal, sub['sub_id']))
             # التحصيل من الباقة: لا يتم احتساب تكلفة وقت نقدية في درج الوردية.
             final_time_cost = 0.0
-            conn.commit()
         else:
             flash("رصيد الباقة لا يكفي! تم التحويل للكاش.", "error")
             payment_method = 'cash'
 
-    # 2. لو كاش (نحسب الخصومات)
     if payment_method == 'cash':
-        # أ. خصم الحجز (Reservation)
-        if visit['reservation_id']:
-             c.execute("SELECT * FROM Reservations WHERE reservation_id=?", (visit['reservation_id'],))
-             res_data = c.fetchone()
-             if res_data and res_data['discount_type'] != 'none':
-                if res_data['discount_type'] == 'percentage':
-                    disc = final_time_cost * (res_data['discount_value'] / 100.0)
-                else:
-                    disc = res_data['discount_value']
-                final_discount = min(disc, final_time_cost)
-
-        # ب. كوبون (Coupon)
-        elif coupon_code:
-            c.execute("SELECT * FROM Coupons WHERE code=?", (coupon_code,))
-            cp = c.fetchone()
-            cp_expired = bool(cp and cp['expiry_date'] and
-                              datetime.datetime.strptime(cp['expiry_date'], '%Y-%m-%d').date() < out_time.date())
-            if cp and not cp['is_used'] and not cp_expired and (not cp['student_id'] or cp['student_id'] == visit['student_id']):
-                coupon_id_save = cp['coupon_id']
-                if cp['discount_type'] == 'percentage':
-                    disc = final_time_cost * (cp['discount_value'] / 100.0)
-                else:
-                    disc = cp['discount_value']
-
-                final_discount = min(disc, final_time_cost)
-                c.execute("UPDATE Coupons SET is_used=1, visit_id=? WHERE coupon_id=?", (visit_id, cp['coupon_id']))
-
-        # ج. حساب الخصم اليدوي وإضافته للإجمالي (بحد أقصى تكلفة الوقت المتبقية)
-        remaining_for_manual = max(0, final_time_cost - final_discount)
-        if manual_disc_value > 0:
-            if manual_disc_type == 'percentage':
-                manual_disc = final_time_cost * (manual_disc_value / 100.0)
-            else:
-                manual_disc = manual_disc_value
-            manual_disc = min(manual_disc, remaining_for_manual)
-        else:
-            manual_disc = 0
-        final_discount += manual_disc
-        final_discount = max(0, min(final_discount, final_time_cost))
+        info, manual_disc = cash_discounts(c, visit, final_time_cost, coupon_code,
+                                          manual_disc_type, manual_disc_value, out_time)
+        final_discount = info['amount'] + manual_disc
+        coupon_id_save = info['coupon_id']
+        if coupon_id_save:
+            c.execute("UPDATE Coupons SET is_used=1, visit_id=? WHERE coupon_id=?", (visit_id, coupon_id_save))
     else:
         manual_disc = 0
 
@@ -1477,9 +1488,13 @@ def add_sale(visit_id):
     
     student_name = None
     if visit_id != 0:
-        c.execute("SELECT S.name FROM Visits V JOIN Students S ON V.student_id=S.student_id WHERE V.visit_id=?", (visit_id,))
+        c.execute("SELECT S.name, V.check_out_time FROM Visits V JOIN Students S ON V.student_id=S.student_id WHERE V.visit_id=?", (visit_id,))
         row = c.fetchone()
-        if row: student_name = row['name']
+        if not row or row['check_out_time']:
+            conn.close()
+            flash("لا يمكن إضافة مشتريات لزيارة مقفولة أو غير موجودة.", "error")
+            return redirect(url_for('dashboard'))
+        student_name = row['name']
 
     # --- إعدادات كروت النت ---
     INTERNET_CARD_NAME = "كارت نت"
@@ -1514,7 +1529,7 @@ def add_sale(visit_id):
 
         total = 0
         skipped = []
-        c.execute("SELECT * FROM Products")
+        c.execute("SELECT * FROM Products WHERE name NOT IN (?, ?)", (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT))
         prods = c.fetchall()
 
         for p in prods:
@@ -1530,13 +1545,15 @@ def add_sale(visit_id):
                 line_total = 0
 
                 # منطق كروت النت
+                card_limit = None
                 if visit_id != 0 and INTERNET_CARD_NAME in p['name']:
+                    card_limit = prepare_card_prices(c, visit_id, pid)
                     c.execute("SELECT SUM(quantity) FROM Sales WHERE visit_id=? AND product_id=?", (visit_id, pid))
                     result = c.fetchone()[0]
                     prev_qty = result if result else 0
                     
                     for i in range(1, qty + 1):
-                        if (prev_qty + i) <= FREE_LIMIT:
+                        if (prev_qty + i) <= card_limit:
                             line_total += 0
                         else:
                             line_total += unit_price
@@ -1547,8 +1564,8 @@ def add_sale(visit_id):
                 v_save = visit_id if visit_id != 0 else None
                 
                 # التسجيل باستخدام shift_id المضمون
-                c.execute("INSERT INTO Sales (product_id, user_id, shift_id, quantity, total_price, visit_id) VALUES (?, ?, ?, ?, ?, ?)",
-                          (pid, session['user_id'], shift_id, qty, line_total, v_save))
+                c.execute("INSERT INTO Sales (product_id, user_id, shift_id, quantity, total_price, visit_id, unit_price, free_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                          (pid, session['user_id'], shift_id, qty, line_total, v_save, unit_price, card_limit))
                 
                 # خصم المخزون
                 c.execute("UPDATE Products SET stock_quantity = stock_quantity - ? WHERE product_id=?", (qty, pid))
@@ -1679,7 +1696,7 @@ def sell_subscription():
             start = datetime.datetime.now()
             end = start + datetime.timedelta(days=pkg['days_valid'])
             c.execute("INSERT INTO StudentSubscriptions (student_id, type_id, start_date, end_date, remaining_hours) VALUES (?, ?, ?, ?, ?)",
-                      (sid, tid, start, end, pkg['total_hours']))
+                      (sid, tid, start.strftime('%Y-%m-%d %H:%M:%S'), end.strftime('%Y-%m-%d %H:%M:%S'), pkg['total_hours']))
 
             # تسجيل بيع الباقة في جدول المبيعات ليظهر في إجمالي كاش الوردية.
             c.execute("SELECT product_id FROM Products WHERE name = ?", ('اشتراك باقة',))
@@ -1923,14 +1940,8 @@ def import_students():
         c = conn.cursor()
 
         kept_with_history = removed = 0
-        if replace_all:
-            c.execute("SELECT student_id FROM Students")
-            for (sid,) in c.fetchall():
-                if student_has_history(c, sid):
-                    kept_with_history += 1
-                else:
-                    c.execute("DELETE FROM Students WHERE student_id = ?", (sid,))
-                    removed += 1
+        backup_file = None
+        valid_rows = []
 
         inserted = updated = 0
         problems = []          # كل صف ماتضافش: (رقم الصف، الاسم، التليفون، السبب)
@@ -1961,20 +1972,47 @@ def import_students():
                 continue
             seen_in_file[core] = row_num
 
-            existing = find_student_by_phone(c, phone)
-            if existing:
-                if replace_all:
-                    # طالب ليه سجل قديم واتساب: نحدّث بياناته من الملف الجديد
-                    c.execute("UPDATE Students SET name=?, college=?, year=? WHERE student_id=?",
-                              (name, college, year, existing['student_id']))
-                    updated += 1
-                else:
-                    problems.append((row_num, name, raw_phone, f"الرقم متسجل قبل كده باسم ({existing['name']})"))
-                continue
+            valid_rows.append((row_num, name, phone, college, year))
 
-            c.execute("INSERT INTO Students (name, phone, college, year) VALUES (?, ?, ?, ?)",
-                      (name, phone, college, year))
-            inserted += 1
+        # Destructive replace is all-or-nothing: validate the WHOLE workbook first.
+        # Normal append still imports valid rows and lists the skipped ones.
+        aborted = replace_all and (bool(problems) or not valid_rows)
+        if aborted:
+            flash("تم إلغاء الاستبدال بدون حذف أو تعديل أي طالب. الملف فاضي أو فيه صفوف غير صحيحة؛ أصلحها وارفعه تاني.", "error")
+        else:
+            if replace_all:
+                backup_dir = os.path.join(BASE_DIR, 'backups')
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_file = 'students-before-import-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.db'
+                # Read from a separate connection: the request owns a write lock,
+                # but has not changed any data yet. sqlite backup is a consistent snapshot.
+                source = sqlite3.connect(DATABASE)
+                destination = sqlite3.connect(os.path.join(backup_dir, backup_file))
+                try:
+                    source.backup(destination)
+                finally:
+                    source.close()
+                    destination.close()
+                c.execute("SELECT student_id FROM Students")
+                for (sid,) in c.fetchall():
+                    if student_has_history(c, sid):
+                        kept_with_history += 1
+                    else:
+                        c.execute("DELETE FROM Students WHERE student_id=?", (sid,))
+                        removed += 1
+            for row_num, name, phone, college, year in valid_rows:
+                existing = find_student_by_phone(c, phone)
+                if existing:
+                    if replace_all:
+                        c.execute("UPDATE Students SET name=?, college=?, year=? WHERE student_id=?",
+                                  (name, college, year, existing['student_id']))
+                        updated += 1
+                    else:
+                        problems.append((row_num, name, phone, f"الرقم متسجل قبل كده باسم ({existing['name']})"))
+                    continue
+                c.execute("INSERT INTO Students (name, phone, college, year) VALUES (?, ?, ?, ?)",
+                          (name, phone, college, year))
+                inserted += 1
 
         conn.commit()
 
@@ -1982,6 +2020,7 @@ def import_students():
             'file_name': file.filename,
             'time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             'replace_all': replace_all, 'removed': removed, 'kept_with_history': kept_with_history,
+            'aborted': aborted, 'backup_file': backup_file,
             'inserted': inserted, 'updated': updated, 'empty_rows': empty_rows,
             'problems': [{'row': r, 'name': n, 'phone': p, 'reason': why} for r, n, p, why in problems],
         }
@@ -1991,9 +2030,10 @@ def import_students():
         except OSError:
             pass
 
-        flash(f"✅ تم إضافة {inserted} طالب" + (f" وتحديث {updated}" if updated else "") +
-              (f" — {len(problems)} صف ماتضافش، التفاصيل تحت" if problems else ""),
-              "success" if inserted or updated else "warning")
+        if not aborted:
+            flash(f"✅ تم إضافة {inserted} طالب" + (f" وتحديث {updated}" if updated else "") +
+                  (f" — {len(problems)} صف ماتضافش، التفاصيل تحت" if problems else ""),
+                  "success" if inserted or updated else "warning")
 
     except Exception as e:
         if conn:
@@ -2023,7 +2063,7 @@ def import_report():
     return render_template('import_report.html', report=report)
 
 
-@app.route('/clean_duplicates')
+@app.route('/clean_duplicates', methods=['POST'])
 def clean_duplicates():
     if session.get('role') != 'manager':
         return redirect(url_for('dashboard'))
@@ -2032,8 +2072,6 @@ def clean_duplicates():
     c = conn.cursor()
 
     try:
-        c.execute("BEGIN")
-
         # نجلب فقط الأسماء المكررة لتقليل حجم المعالجة
         c.execute("""
             SELECT
@@ -2109,15 +2147,7 @@ def clean_duplicates():
 
         # حماية: لا تحذف أي طالب له أي أثر حقيقي في النظام (زيارة، اشتراك، أو كوبون)
         # حتى لو طابق شرط "التكرار" — عشان منفقدش بيانات أو نكسر زيارة شغالة دلوقتي.
-        if to_delete:
-            c.execute("SELECT DISTINCT student_id FROM Visits")
-            has_visits = {row['student_id'] for row in c.fetchall()}
-            c.execute("SELECT DISTINCT student_id FROM StudentSubscriptions")
-            has_subs = {row['student_id'] for row in c.fetchall()}
-            c.execute("SELECT DISTINCT student_id FROM Coupons WHERE student_id IS NOT NULL")
-            has_coupons = {row['student_id'] for row in c.fetchall()}
-            has_history = has_visits | has_subs | has_coupons
-            to_delete -= has_history
+        to_delete = {sid for sid in to_delete if not student_has_history(c, sid)}
 
         if to_delete:
             c.executemany(
@@ -2127,7 +2157,7 @@ def clean_duplicates():
 
         deleted_count = len(to_delete)
         conn.commit()
-        flash(f"✅ تم حذف {deleted_count} سجل مكرر بنجاح (تم تجاهل أي تكرار له زيارات أو اشتراكات أو كوبونات سابقة حفاظاً على البيانات).", "success")
+        flash(f"✅ تم حذف {deleted_count} سجل مكرر بنجاح (تم تجاهل أي تكرار له زيارات أو اشتراكات أو كوبونات أو استعارات سابقة حفاظاً على البيانات).", "success")
     except Exception as e:
         conn.rollback()
         flash(f"❌ حدث خطأ أثناء حذف التكرارات: {str(e)}", "error")
@@ -2218,113 +2248,79 @@ def manage_users():
 
 
 
+def prepare_card_prices(c, visit_id, product_id):
+    c.execute("SELECT sale_price FROM Products WHERE product_id=?", (product_id,))
+    current_price = c.fetchone()['sale_price']
+    c.execute("SELECT setting_value FROM Settings WHERE setting_key='internet_free_limit'")
+    row = c.fetchone()
+    limit = int(row[0]) if row else 2
+    c.execute("SELECT * FROM Sales WHERE visit_id=? AND product_id=? ORDER BY sale_id", (visit_id, product_id))
+    rows = c.fetchall()
+    limit = next((r['free_limit'] for r in rows if r['free_limit'] is not None), limit)
+    used = 0
+    for sale in rows:
+        charged = max(0, used + sale['quantity'] - limit) - max(0, used - limit)
+        price = sale['unit_price']
+        if price is None:
+            price = sale['total_price'] / charged if charged > 0 else current_price
+        c.execute("UPDATE Sales SET unit_price=?, free_limit=? WHERE sale_id=?", (price, limit, sale['sale_id']))
+        used += sale['quantity']
+    return limit
+
+
+def reprice_visit_cards(c, visit_id, product_id):
+    c.execute("SELECT * FROM Sales WHERE visit_id=? AND product_id=? ORDER BY sale_id", (visit_id, product_id))
+    used = 0
+    for sale in c.fetchall():
+        limit = sale['free_limit']
+        charged = max(0, used + sale['quantity'] - limit) - max(0, used - limit)
+        total = charged * sale['unit_price']
+        adjust_closed_shift_sales(c, sale['shift_id'], total - sale['total_price'], product_id, visit_id)
+        c.execute("UPDATE Sales SET total_price=? WHERE sale_id=?", (total, sale['sale_id']))
+        used += sale['quantity']
+
+
 @app.route("/edit_sale_quantity/<int:sale_id>", methods=['POST'])
 def edit_sale_quantity(sale_id):
-    if 'user_id' not in session: return redirect(url_for('login'))
-    
-    new_quantity = int(request.form.get('new_quantity', 0))
-    if new_quantity <= 0:
-        flash("الكمية يجب أن تكون 1 أو أكثر. للحذف استخدم زر الحذف.", "error")
-        # هنرجع لنفس الصفحة، محتاجين نجيب visit_id
-        # (للتبسيط، هنعتمد ان الـ referer هيرجعنا، او نجيبها من الداتا بيز)
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT visit_id FROM Sales WHERE sale_id=?", (sale_id,))
-        row = c.fetchone()
-        conn.close()
-        if row and row['visit_id']:
-             return redirect(url_for('show_invoice', visit_id=row['visit_id']))
-        return redirect(url_for('dashboard'))
-
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     conn = get_db()
     c = conn.cursor()
-    
-    # 1. هات تفاصيل البيعة القديمة
-    c.execute("""
-        SELECT S.*, P.sale_price, P.stock_quantity, V.check_out_time 
-        FROM Sales S 
-        JOIN Products P ON S.product_id = P.product_id 
-        LEFT JOIN Visits V ON S.visit_id = V.visit_id 
-        WHERE S.sale_id = ?
-    """, (sale_id,))
+    c.execute("""SELECT S.*, P.name, P.sale_price, P.stock_quantity, V.check_out_time
+                 FROM Sales S JOIN Products P ON S.product_id=P.product_id
+                 LEFT JOIN Visits V ON S.visit_id=V.visit_id WHERE S.sale_id=?""", (sale_id,))
     sale = c.fetchone()
-    
     if not sale:
-        conn.close()
         return redirect(url_for('dashboard'))
-
-    # 2. التحقق من الصلاحية
-    is_manager = (session.get('role') == 'manager')
-    is_visit_open = (sale['visit_id'] is not None and sale['check_out_time'] is None)
-    
-    if is_manager or is_visit_open:
-        old_quantity = sale['quantity']
-        quantity_diff = new_quantity - old_quantity # لو موجب يبقى زودنا، لو سالب يبقى نقصنا
-        
-        # التأكد من المخزون (في حالة الزيادة فقط)
-        if quantity_diff > 0 and sale['stock_quantity'] < quantity_diff:
-            flash(f"عفواً، الكمية المتاحة في المخزون لا تكفي للزيادة (المتاح: {sale['stock_quantity']})", "error")
-        else:
-            # أ. تحديث المخزون (بالعكس: لو زودنا بيع بننقص مخزون)
-            c.execute("UPDATE Products SET stock_quantity = stock_quantity - ? WHERE product_id=?", 
-                      (quantity_diff, sale['product_id']))
-            
-            # ب. إعادة حساب السعر الإجمالي للصنف (مهم عشان كروت النت وغيره)
-            # ملاحظة: منطق كروت النت المعقد (أول 2 مجاناً) محتاج معالجة خاصة هنا.
-            # للتبسيط: هنحسب السعر الجديد = الكمية الجديدة * سعر الوحدة (إلا لو كارت نت)
-            
-            # --- منطق إعادة الحساب (يدعم كروت النت) ---
-            # --- منطق احترافي لإعادة الحساب (يدعم كروت النت) ---
-            INTERNET_CARD_NAME = "كارت نت"
-            new_total_price = 0
-            
-            # بنجيب اسم المنتج عشان نتأكد هو كارت نت ولا حاجة تانية
-            c.execute("SELECT name FROM Products WHERE product_id=?", (sale['product_id'],))
-            prod_name = c.fetchone()['name']
-            
-            if INTERNET_CARD_NAME in prod_name and sale['visit_id']:
-                # 1. بنشوف الطالب ده أخد كام كارت في عمليات تانية "غير" اللي بنعدلها دلوقتي
-                c.execute("""SELECT SUM(quantity) FROM Sales
-                             WHERE visit_id=? AND product_id=? AND sale_id != ?""",
-                          (sale['visit_id'], sale['product_id'], sale_id))
-                prev_qty = c.fetchone()[0] or 0
-
-                # 1.5. بنجيب حد الكروت المجانية من الإعدادات (نفس المنطق المستخدم في إضافة البيع)
-                c.execute("SELECT setting_value FROM Settings WHERE setting_key='internet_free_limit'")
-                limit_row = c.fetchone()
-                free_limit = int(limit_row['setting_value']) if limit_row else 2
-
-                # 2. بنحسب سعر الكمية الجديدة حتة حتة بناءً على اللي أخده قبل كدة
-                for i in range(1, new_quantity + 1):
-                    if (prev_qty + i) <= free_limit:
-                        new_total_price += 0
-                    else:
-                        new_total_price += sale['sale_price'] # اللي بعد الحد المجاني
-            else:
-                # 3. لو منتج عادي (شاي، قهوة) يحسب الكمية في السعر فوراً
-                new_total_price = new_quantity * sale['sale_price']
-            
-            # --- (جزء مهم جداً) تحديث إجمالي الوردية بالفرق ---
-            price_diff = new_total_price - sale['total_price']
-            if sale['shift_id']:
-                adjust_closed_shift_sales(c, sale['shift_id'], price_diff, sale['product_id'])
-            
-            # ج. تحديث البيعة بالقيم الجديدة
-            c.execute("UPDATE Sales SET quantity=?, total_price=? WHERE sale_id=?", 
-                      (new_quantity, new_total_price, sale_id))
-            
-            conn.commit()
-            flash("تم تعديل الكمية والسعر بنجاح.", "success")
-
+    target = url_for('show_invoice', visit_id=sale['visit_id']) if sale['visit_id'] else url_for('dashboard')
+    if session.get('role') != 'manager' and (sale['visit_id'] is None or sale['check_out_time'] is not None):
+        flash("لا يمكن تعديل فاتورة مغلقة.", "error")
+        return redirect(target)
+    if sale['name'] in (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT):
+        flash("لا يمكن تعديل قيود الباقات وتأمين الكتب كأصناف كافيتريا.", "error")
+        return redirect(target)
+    quantity = int(request.form.get('new_quantity', 0))
+    diff = quantity - sale['quantity']
+    if quantity <= 0 or (diff > 0 and sale['stock_quantity'] < diff):
+        flash("الكمية غير صحيحة أو المخزون لا يكفي.", "error")
+        return redirect(target)
+    card = bool(sale['visit_id']) and 'كارت نت' in sale['name']
+    if card:
+        prepare_card_prices(c, sale['visit_id'], sale['product_id'])
+    c.execute("UPDATE Products SET stock_quantity=stock_quantity-? WHERE product_id=?", (diff, sale['product_id']))
+    if card:
+        c.execute("UPDATE Sales SET quantity=? WHERE sale_id=?", (quantity, sale_id))
+        reprice_visit_cards(c, sale['visit_id'], sale['product_id'])
     else:
-        flash("عفواً، لا يمكن تعديل فاتورة مغلقة.", "error")
-    
+        price = sale['unit_price'] if sale['unit_price'] is not None else sale['total_price'] / sale['quantity']
+        total = quantity * price
+        adjust_closed_shift_sales(c, sale['shift_id'], total-sale['total_price'], sale['product_id'], sale['visit_id'])
+        c.execute("UPDATE Sales SET quantity=?,total_price=?,unit_price=? WHERE sale_id=?", (quantity,total,price,sale_id))
+    conn.commit()
     conn.close()
-    
-    # 3. العودة للفاتورة
-    if sale['visit_id']:
-        return redirect(url_for('show_invoice', visit_id=sale['visit_id']))
-    return redirect(url_for('dashboard'))
+    flash("تم تعديل الكمية والسعر بنجاح.", "success")
+    return redirect(target)
+
 
 @app.route("/delete_sale_item/<int:sale_id>", methods=['POST'])
 def delete_sale_item(sale_id):
@@ -2353,16 +2349,26 @@ def delete_sale_item(sale_id):
     
     # المسموح لهم بالحذف: المدير (في أي وقت) أو الموظف (لو الزيارة لسه مفتوحة)
     if is_manager or is_visit_open:
+        c.execute("SELECT name FROM Products WHERE product_id=?", (sale['product_id'],))
+        product = c.fetchone()
+        if product and product['name'] in (SUBSCRIPTION_PRODUCT, BOOK_DEPOSIT_PRODUCT):
+            flash("لا يمكن حذف قيود الباقات وتأمين الكتب كأصناف كافيتريا.", "error")
+            return redirect(url_for('dashboard'))
+        card = bool(product and sale['visit_id'] and 'كارت نت' in product['name'])
+        if card:
+            prepare_card_prices(c, sale['visit_id'], sale['product_id'])
         # أ. رجع الكمية للمخزن
         c.execute("UPDATE Products SET stock_quantity = stock_quantity + ? WHERE product_id=?",
                   (sale['quantity'], sale['product_id']))
 
         # ب. اخصم قيمة البيعة المحذوفة من إجمالي مبيعات الوردية
         if sale['shift_id']:
-            adjust_closed_shift_sales(c, sale['shift_id'], -sale['total_price'], sale['product_id'])
+            adjust_closed_shift_sales(c, sale['shift_id'], -sale['total_price'], sale['product_id'], sale['visit_id'])
 
         # ج. احذف البيعة
         c.execute("DELETE FROM Sales WHERE sale_id=?", (sale_id,))
+        if card:
+            reprice_visit_cards(c, sale['visit_id'], sale['product_id'])
         conn.commit()
         flash("تم حذف المنتج من الفاتورة.", "success")
     else:
@@ -2999,6 +3005,7 @@ def start_reservation_visit(res_id):
         flash(f"تم تسجيل دخول {res['client_name']} بنجاح!", "success")
         
     except sqlite3.Error as e:
+        conn.rollback()
         flash(f"حدث خطأ: {e}", "error")
 
     conn.close()
@@ -3139,7 +3146,7 @@ def return_book(borrow_id):
     # 3. تحديث الداتا بيز
     c.execute("""
         UPDATE Borrowings SET return_date=?, final_cost=?, status='returned' 
-        WHERE borrow_id=?""", (return_date, rental_cost, borrow_id))
+        WHERE borrow_id=?""", (return_date.strftime('%Y-%m-%d %H:%M:%S'), rental_cost, borrow_id))
         
     c.execute("UPDATE Books SET is_available=1 WHERE book_id=?", (borrow['book_id'],))
     
@@ -3201,8 +3208,8 @@ def reset_data_keep_users():
     
     # 4. إعادة إدخال البيانات الافتراضية (الغرف، المنتجات الأساسية، الباقات)
     # لأننا مسحناها في الخطوة السابقة
-    setup_database.create_database()
-    
+    # All master tables were retained; no second connection/seed pass is needed.
+
     # 5. تنظيف السيشن من أي شيفت كان مفتوح (لأننا مسحنا الشيفتات)
     session.pop('active_shift_id', None)
     

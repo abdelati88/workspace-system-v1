@@ -166,6 +166,8 @@ def create_database():
         total_price REAL NOT NULL,
         sale_time DATETIME DEFAULT CURRENT_TIMESTAMP,
         visit_id INTEGER,
+        unit_price REAL,
+        free_limit INTEGER,
         FOREIGN KEY(product_id) REFERENCES Products(product_id),
         FOREIGN KEY(user_id) REFERENCES Users(user_id),
         FOREIGN KEY(shift_id) REFERENCES Shifts(shift_id),
